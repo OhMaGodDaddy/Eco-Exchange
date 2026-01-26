@@ -5,7 +5,7 @@ const passport = require('passport');
 const session = require('express-session');
 
 // 1. IMPORT USER MODEL (Ensure the path is correct)
-const User = require('./models/User'); 
+const User = require('./model/User'); 
 
 // Import the Passport Config
 require('./config/passport'); 
