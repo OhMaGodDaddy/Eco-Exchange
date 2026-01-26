@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import { BrowserRouter as Router } from 'react-router-dom'; // 👈 ADD THIS
 import Login from './pages/Login'; 
 import Dashboard from './pages/AdminDashboard'; 
 
@@ -10,16 +11,14 @@ function App() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        // 1. Ask the Render server if this browser has a valid session cookie
         const response = await fetch("https://eco-exchange-api.onrender.com/api/current_user", {
             method: "GET",
-            credentials: "include", // 👈 CRITICAL: Sends the cookie to the server
+            credentials: "include", 
             headers: { "Content-Type": "application/json" }
         });
 
         if (response.ok) {
           const data = await response.json();
-          // 2. If user data exists, update the state to show the Dashboard
           if (data && data._id) {
             setUser(data);
           }
@@ -30,7 +29,6 @@ function App() {
         setLoading(false);
       }
     };
-
     fetchUser();
   }, []);
 
@@ -38,10 +36,15 @@ function App() {
 
   return (
     <GoogleOAuthProvider clientId="YOUR_CLIENT_ID_HERE">
-      <div className="app">
-        {/* 3. Logic: If user is logged in, show Dashboard. Otherwise, show Login. */}
-        {user ? <Dashboard user={user} /> : <Login />}
-      </div>
+      <Router> {/* 👈 THIS FIXES THE WHITE SCREEN ERROR */}
+        <div className="app">
+          {user ? (
+            <Dashboard user={user} />
+          ) : (
+            <Login />
+          )}
+        </div>
+      </Router>
     </GoogleOAuthProvider>
   );
 }
