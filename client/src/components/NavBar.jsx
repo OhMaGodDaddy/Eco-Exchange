@@ -32,11 +32,10 @@ function NavBar({ user, onLogout }) {
         <div style={styles.profileSection}>
             <Link to="/profile" style={{ display: 'flex', alignItems: 'center' }}>
             <img 
-                src={user.picture} 
-                alt="Profile" 
+                src={user.picture || user.photos?.[0]?.value || 'https://ui-avatars.com/api/?name=' + user.name} 
+                alt="User Profile" 
                 style={styles.avatar} 
-                onError={(e) => e.target.src = 'https://via.placeholder.com/400'} // Fallback if image fails
-            />
+                />
             </Link>
             <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
         </div>
