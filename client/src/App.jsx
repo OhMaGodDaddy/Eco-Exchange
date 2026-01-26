@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { BrowserRouter as Router } from 'react-router-dom'; // 👈 ADD THIS
+import { BrowserRouter as Router } from 'react-router-dom';
 import Login from './pages/Login'; 
-import Dashboard from './pages/AdminDashboard'; 
-import ItemGallery from './pages/ItemGallery'; // 👈 Ensure this matches your filename
+import Home from './pages/Home'; // 👈 Import your professional Home page
 
 function App() {
   const [user, setUser] = useState(null);
@@ -41,10 +40,12 @@ function App() {
         <div className="app">
           {!user ? (
             <Login />
-          ) : user.role === 'admin' ? (
-            <Dashboard user={user} />
           ) : (
-            <ItemGallery user={user} /> // 👈 CHANGE THIS FROM UserHome TO ItemGallery
+            /* Everyone (Admin and User) now goes to the professional Home.jsx.
+               The Home component will handle showing the delete buttons 
+               based on the user's role.
+            */
+            <Home user={user} /> 
           )}
         </div>
       </Router>
