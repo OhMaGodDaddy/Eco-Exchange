@@ -7,11 +7,11 @@ const UserSchema = new mongoose.Schema({
   image: { type: String },
   createdAt: { type: Date, default: Date.now },
   
-  // --- NEW FIELD ---
+  // --- NEW ADMIN FIELD ---
   role: { 
     type: String, 
-    enum: ['user', 'admin'], // Can only be these two
-    default: 'user'          // Everyone starts as a regular user
+    enum: ['user', 'admin'], // We limit the options to prevent typos
+    default: 'user'          // specific users must be manually promoted to admin
   }
 });
 
