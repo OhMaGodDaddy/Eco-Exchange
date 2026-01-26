@@ -3,8 +3,9 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Login from './pages/Login'; 
 import Home from './pages/Home';
-import NavBar from './components/NavBar'; // 👈 FIXED: Matches your exact filename
+import NavBar from './components/NavBar'; 
 import PostItem from './pages/PostItem'; 
+import ItemDetail from './pages/ItemDetail'; // 👈 1. IMPORT THE NEW PAGE
 
 function App() {
   const [user, setUser] = useState(null);
@@ -41,7 +42,6 @@ function App() {
     <GoogleOAuthProvider clientId="1002059220341-9vj4rqbb1p9808ludct00s0cc2oi5734.apps.googleusercontent.com">
       <Router>
         <div className="app">
-          {/* 🛡️ This renders the white bar with Sell, Profile, and Logout */}
           {user && <NavBar user={user} onLogout={handleLogout} />} 
           
           <Routes>
@@ -51,6 +51,8 @@ function App() {
               <>
                 <Route path="/" element={<Home user={user} />} />
                 <Route path="/post" element={<PostItem user={user} />} />
+                {/* 👈 2. ADD THIS DYNAMIC ROUTE FOR INDIVIDUAL ITEMS */}
+                <Route path="/item/:id" element={<ItemDetail user={user} />} />
               </>
             )}
           </Routes>
