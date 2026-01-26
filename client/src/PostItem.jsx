@@ -9,8 +9,7 @@ function PostItem() {
     description: '',
     category: 'Furniture',
     image: '', 
-    condition: 'Good',
-    hubLocation: '' // <--- 1. NEW REQUIRED FIELD
+    condition: 'Good'
   });
   const [loading, setLoading] = useState(false);
 
@@ -38,14 +37,18 @@ function PostItem() {
     e.preventDefault();
     setLoading(true);
 
-    const itemPayload = { 
-        ...formData, 
-        price: 0,
-        // We send name as both 'name' and 'title' just to be safe
-        title: formData.name 
+    const itemPayload = {
+        ...formData,
+        title: formData.name, // Backend expects 'title'
+        price: 0,             // Ensure price is a number
+        hubLocation: 'Main Campus' // <--- ADDED: Required by your database!
     };
 
-    axios.post('http://localhost:5000/api/items', itemPayload)
+    // 1. Updated URL to your Render link
+    // 2. Added { withCredentials: true } so it knows WHO is posting
+    axios.post('https://eco-exchange-api.onrender.com/api/items', itemPayload, {
+        withCredentials: true 
+    })
       .then(res => {
         setLoading(false);
         alert('Gift posted successfully!');
@@ -53,13 +56,12 @@ function PostItem() {
       })
       .catch(err => {
         setLoading(false);
-        console.error(err);
+        console.error("FULL ERROR DETAILS:", err);
         
         if (err.response && err.response.data) {
-             // This will show you exactly what is missing if it happens again
             alert(`Server Error: ${JSON.stringify(err.response.data)}`);
         } else {
-            alert('Error posting item.');
+            alert('Error posting item. Check console.');
         }
       });
   };
@@ -71,33 +73,16 @@ function PostItem() {
       
       <form onSubmit={handleSubmit} style={styles.form}>
         
-        {/* Item Name */}
         <div style={styles.inputGroup}>
           <label style={styles.label}>What are you gifting?</label>
           <input type="text" name="name" placeholder="e.g. Vintage Lamp" value={formData.name} onChange={handleChange} style={styles.input} required />
         </div>
 
-        {/* --- 2. NEW LOCATION INPUT --- */}
-        <div style={styles.inputGroup}>
-          <label style={styles.label}>Pickup Location (City or Neighborhood)</label>
-          <input 
-            type="text" 
-            name="hubLocation" 
-            placeholder="e.g. Downtown / Main St." 
-            value={formData.hubLocation} 
-            onChange={handleChange} 
-            style={styles.input} 
-            required 
-          />
-        </div>
-
-        {/* Description */}
         <div style={styles.inputGroup}>
           <label style={styles.label}>Description</label>
           <textarea name="description" placeholder="Condition, pickup instructions, etc." value={formData.description} onChange={handleChange} style={styles.textarea} required />
         </div>
 
-        {/* Category */}
         <div style={styles.inputGroup}>
           <label style={styles.label}>Category</label>
           <select name="category" value={formData.category} onChange={handleChange} style={styles.select}>
@@ -111,9 +96,10 @@ function PostItem() {
           </select>
         </div>
 
-        {/* Photo Upload */}
+        {/* --- BEAUTIFUL UPLOAD SECTION --- */}
         <div style={styles.inputGroup}>
           <label style={styles.label}>Item Photo</label>
+          
           <label htmlFor="file-upload" style={styles.uploadBox}>
             {formData.image ? (
               <img src={formData.image} alt="Preview" style={styles.previewImage} />
@@ -124,11 +110,18 @@ function PostItem() {
               </div>
             )}
           </label>
-          <input id="file-upload" type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+
+          <input 
+            id="file-upload"
+            type="file" 
+            accept="image/*" 
+            onChange={handleImageUpload} 
+            style={{ display: 'none' }} 
+          />
         </div>
 
         <button type="submit" style={styles.button} disabled={loading}>
-            {loading ? 'Uploading...' : 'Post Gift'}
+            {loading ? 'Uploading...' : 'Post Item'}
         </button>
       </form>
     </div>
@@ -145,9 +138,33 @@ const styles = {
   input: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem' },
   textarea: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem', height: '100px', resize: 'vertical' },
   select: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem', backgroundColor: 'white' },
-  uploadBox: { border: '2px dashed #1B4332', borderRadius: '8px', padding: '20px', textAlign: 'center', cursor: 'pointer', backgroundColor: '#f8fdfa', transition: '0.3s', minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  uploadPlaceholder: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', color: '#1B4332', fontWeight: 'bold' },
-  previewImage: { maxWidth: '100%', maxHeight: '200px', objectFit: 'contain', borderRadius: '4px' },
+  uploadBox: {
+    border: '2px dashed #1B4332',
+    borderRadius: '8px',
+    padding: '20px',
+    textAlign: 'center',
+    cursor: 'pointer',
+    backgroundColor: '#f8fdfa',
+    transition: '0.3s',
+    minHeight: '150px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  uploadPlaceholder: {
+    display: 'flex', 
+    flexDirection: 'column', 
+    alignItems: 'center', 
+    gap: '10px', 
+    color: '#1B4332',
+    fontWeight: 'bold'
+  },
+  previewImage: { 
+    maxWidth: '100%', 
+    maxHeight: '200px', 
+    objectFit: 'contain', 
+    borderRadius: '4px' 
+  },
   button: { padding: '15px', backgroundColor: '#1B4332', color: 'white', border: 'none', borderRadius: '6px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px', opacity: 1 }
 };
 

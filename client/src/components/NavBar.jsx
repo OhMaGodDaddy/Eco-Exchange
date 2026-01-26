@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FaLeaf, FaPlus } from 'react-icons/fa';
+import { FaLeaf, FaPlus, FaShieldAlt } from 'react-icons/fa'; // Added FaShieldAlt for admin icon
 
 // Receives 'user' and 'onLogout' from App.jsx
 function Navbar({ user, onLogout }) {
@@ -16,12 +16,19 @@ function Navbar({ user, onLogout }) {
       {/* Right Side Actions */}
       <div style={styles.actions}>
         
+        {/* --- ADMIN DASHBOARD LINK (Only for Admins) --- */}
+        {user && user.role === 'admin' && (
+            <Link to="/admin" style={styles.adminLink}>
+                <FaShieldAlt style={{ marginRight: '5px' }}/> Admin
+            </Link>
+        )}
+
         {/* Sell Button */}
         <Link to="/post" style={styles.sellBtn}>
             <FaPlus style={{marginRight: '5px'}}/> Sell
         </Link>
 
-        {/* User Profile (Since we are private, we KNOW user exists) */}
+        {/* User Profile */}
         <div style={styles.profileSection}>
             <Link to="/profile">
                {/* Display Google Profile Pic */}
@@ -70,6 +77,19 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '15px'
+  },
+  // --- NEW STYLE FOR ADMIN LINK ---
+  adminLink: {
+    display: 'flex',
+    alignItems: 'center',
+    color: '#d32f2f', // Red color to stand out
+    textDecoration: 'none',
+    fontWeight: 'bold',
+    fontSize: '0.9rem',
+    border: '1px solid #d32f2f',
+    padding: '6px 12px',
+    borderRadius: '8px',
+    backgroundColor: '#fff0f0'
   },
   sellBtn: {
     backgroundColor: '#1B4332',
