@@ -1,55 +1,50 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Navbar from './components/NavBar'; 
-import Home from './pages/Home';
-import PostItem from './PostItem'; 
-import Login from './pages/Login'; 
-import Profile from './pages/Profile'; 
-import ItemDetail from './pages/ItemDetail'; 
+import Login from './pages/Login'; // Adjust path if needed
+import Dashboard from './pages/AdminDashboard'; // Or whatever your main page is
+import { GoogleOAuthProvider } from '@react-oauth/google';
 
 function App() {
   const [user, setUser] = useState(null);
 
+  // 🌟 THIS IS THE MISSING PIECE 🌟
+  // When the app loads, check if we are already logged in
   useEffect(() => {
-    const savedUser = localStorage.getItem('user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    const fetchUser = async () => {
+      try {
+        // We ask the backend: "Who is the current user?"
+        // Note: We MUST include 'credentials: include' to send the cookie!
+        const response = await fetch("https://eco-exchange-api.onrender.com/api/current_user", {
+            method: "GET",
+            credentials: "include" 
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          // If data is not empty, we are logged in!
+          if (data && data._id) {
+            console.log("✅ User found:", data);
+            setUser(data);
+          }
+        }
+      } catch (error) {
+        console.log("Not logged in yet");
+      }
+    };
+
+    fetchUser();
   }, []);
 
-  const handleLogin = (decodedUser) => {
-    setUser(decodedUser);
-    localStorage.setItem('user', JSON.stringify(decodedUser));
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
-  };
-
-  // 1. Login Page (No Router needed here)
-  if (!user) {
-    return <Login onLogin={handleLogin} />;
-  }
-
-  // 2. Authenticated App (With Router and ALL Routes)
+  // If we have a user, show the Dashboard. Otherwise, show Login.
   return (
-    <BrowserRouter>
-      <Navbar user={user} onLogout={handleLogout} />
-      
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/post" element={<PostItem />} />
-        <Route path="/profile" element={<Profile />} />
-        
-        {/* ✅ THIS IS THE CRITICAL LINE THAT STOPS THE REFRESH/BOUNCE */}
-        <Route path="/item/:id" element={<ItemDetail />} />
-        
-        {/* This catches bad URLs and sends them Home. 
-            Since we added the line above, /item/:id is no longer considered "bad". */}
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </BrowserRouter>
+    <GoogleOAuthProvider clientId="YOUR_GOOGLE_CLIENT_ID">
+      <div className="app">
+        {user ? (
+          <Dashboard user={user} />
+        ) : (
+          <Login />
+        )}
+      </div>
+    </GoogleOAuthProvider>
   );
 }
 
