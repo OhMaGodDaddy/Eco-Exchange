@@ -36,7 +36,7 @@ function App() {
   if (loading) return <div style={{color:'white', textAlign:'center', marginTop:'20%'}}>Checking Session...</div>;
 
   return (
-    <GoogleOAuthProvider clientId="1002059220341-9vj4rqbb1p9808ludct00s0cc2oi5734.apps.googleusercontent.com">
+    <GoogleOAuthProvider clientId="YOUR_CLIENT_ID">
       <Router>
         <div className="app">
           {!user ? (
@@ -44,27 +44,12 @@ function App() {
           ) : user.role === 'admin' ? (
             <Dashboard user={user} />
           ) : (
-            <UserHome user={user} /> // 👈 Create a simple UserHome or Redirect
+            <ItemGallery user={user} /> // 👈 CHANGE THIS FROM UserHome TO ItemGallery
           )}
         </div>
       </Router>
     </GoogleOAuthProvider>
   );
-
-  return (
-  <Router>
-    <div className="app">
-      {!user ? (
-        <Login />
-      ) : user.role === 'admin' ? (
-        <Dashboard user={user} /> // 🛡️ You see the full management view
-      ) : (
-        <ItemGallery user={user} /> // 📦 Regular users see the item list
-      )}
-    </div>
-  </Router>
-);
-
 }
 
 export default App;
