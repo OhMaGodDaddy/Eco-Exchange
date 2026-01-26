@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { BrowserRouter as Router } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'; // 👈 Added Routes/Route
 import Login from './pages/Login'; 
 import Home from './pages/Home';
-import Navbar from './components/Navbar'; // 👈 1. IMPORT YOUR EXISTING NAVBAR
+import Navbar from './components/NavBar'; 
+import PostItem from './pages/PostItem'; // 👈 Ensure you have this for the "Sell" button
 
 function App() {
   const [user, setUser] = useState(null);
@@ -17,12 +18,9 @@ function App() {
             credentials: "include", 
             headers: { "Content-Type": "application/json" }
         });
-
         if (response.ok) {
           const data = await response.json();
-          if (data && data._id) {
-            setUser(data);
-          }
+          if (data && data._id) setUser(data);
         }
       } catch (error) {
         console.error("Login check failed:", error);
@@ -33,7 +31,6 @@ function App() {
     fetchUser();
   }, []);
 
-  // 🚨 2. ADD LOGOUT LOGIC
   const handleLogout = () => {
     window.location.href = "https://eco-exchange-api.onrender.com/api/logout";
   };
@@ -44,14 +41,20 @@ function App() {
     <GoogleOAuthProvider clientId="1002059220341-9vj4rqbb1p9808ludct00s0cc2oi5734.apps.googleusercontent.com">
       <Router>
         <div className="app">
-          {/* 👈 3. SHOW NAVBAR TO LOGGED IN USERS */}
+          {/* 🛡️ Navbar must be OUTSIDE the Routes to stay at the top */}
           {user && <Navbar user={user} onLogout={handleLogout} />} 
           
-          {!user ? (
-            <Login />
-          ) : (
-            <Home user={user} /> 
-          )}
+          <Routes>
+            {!user ? (
+              <Route path="*" element={<Login />} />
+            ) : (
+              <>
+                <Route path="/" element={<Home user={user} />} />
+                <Route path="/post" element={<PostItem user={user} />} />
+                {/* Add other routes like /profile here */}
+              </>
+            )}
+          </Routes>
         </div>
       </Router>
     </GoogleOAuthProvider>
