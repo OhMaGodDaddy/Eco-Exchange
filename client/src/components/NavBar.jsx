@@ -28,11 +28,15 @@ function NavBar({ user, onLogout }) {
             <FaPlus style={{marginRight: '5px'}}/> Sell
         </Link>
 
-        {/* User Profile */}
+        {/* User Profile Section */}
         <div style={styles.profileSection}>
-            <Link to="/profile">
-               {/* Display Google Profile Pic */}
-               <img src={user.picture} alt="Profile" style={styles.avatar} />
+            <Link to="/profile" style={{ display: 'flex', alignItems: 'center' }}>
+            <img 
+                src={user.picture} 
+                alt="Profile" 
+                style={styles.avatar} 
+                onError={(e) => e.target.src = 'https://via.placeholder.com/400'} // Fallback if image fails
+            />
             </Link>
             <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
         </div>
@@ -109,11 +113,13 @@ const styles = {
     gap: '10px'
   },
   avatar: {
-    width: '35px',
-    height: '35px',
-    borderRadius: '50%',
+    width: '40px',          // Slightly larger for better visibility
+    height: '40px',         // Must match width for a perfect circle
+    borderRadius: '50%',    // Makes it a circle
     cursor: 'pointer',
-    border: '2px solid #1B4332'
+    border: '2px solid #1B4332',
+    objectFit: 'cover',     // 👈 CRITICAL: Prevents squishing/stretching
+    display: 'block'        // Ensures proper spacing
   },
   logoutBtn: {
     background: 'none',
