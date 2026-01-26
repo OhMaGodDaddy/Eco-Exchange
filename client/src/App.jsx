@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'; // 👈 Added Routes/Route
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Login from './pages/Login'; 
 import Home from './pages/Home';
-import Navbar from './components/NavBar'; 
-import PostItem from './pages/PostItem'; // 👈 Ensure you have this for the "Sell" button
+import NavBar from './components/NavBar'; // 👈 FIXED: Matches your exact filename
+import PostItem from './pages/PostItem'; 
 
 function App() {
   const [user, setUser] = useState(null);
@@ -41,8 +41,8 @@ function App() {
     <GoogleOAuthProvider clientId="1002059220341-9vj4rqbb1p9808ludct00s0cc2oi5734.apps.googleusercontent.com">
       <Router>
         <div className="app">
-          {/* 🛡️ Navbar must be OUTSIDE the Routes to stay at the top */}
-          {user && <Navbar user={user} onLogout={handleLogout} />} 
+          {/* 🛡️ This renders the white bar with Sell, Profile, and Logout */}
+          {user && <NavBar user={user} onLogout={handleLogout} />} 
           
           <Routes>
             {!user ? (
@@ -51,7 +51,6 @@ function App() {
               <>
                 <Route path="/" element={<Home user={user} />} />
                 <Route path="/post" element={<PostItem user={user} />} />
-                {/* Add other routes like /profile here */}
               </>
             )}
           </Routes>
