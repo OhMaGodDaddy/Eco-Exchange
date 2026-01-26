@@ -1,0 +1,52 @@
+:root {
+  /* Brand Colors */
+  --forest-green: #1B4332;
+  --sage: #52796F;
+  --sage-light: #B7E4C7;
+  --cream: #F8F7F4;
+  --warm-gray: #6B7280;
+  --text-main: #1F2937;
+  --white: #ffffff;
+  
+  /* UI Variables */
+  --bg-color: var(--cream);
+  --primary: var(--forest-green);
+  --secondary: var(--sage);
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding-bottom: 80px; /* Space for nav */
+}
+
+/* Global Utility Classes */
+.btn-primary {
+  background-color: var(--forest-green);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity 0.2s;
+}
+.btn-primary:active { opacity: 0.9; }
+
+.tag {
+  background-color: var(--sage-light);
+  color: var(--forest-green);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

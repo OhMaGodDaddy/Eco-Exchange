@@ -1,0 +1,108 @@
+import { Link } from 'react-router-dom';
+import { FaLeaf, FaPlus } from 'react-icons/fa';
+
+// Receives 'user' and 'onLogout' from App.jsx
+function Navbar({ user, onLogout }) {
+  return (
+    <nav style={styles.nav}>
+      {/* Logo */}
+      <Link to="/" style={styles.logo}>
+        <div style={styles.iconContainer}>
+            <FaLeaf size={20} color="#fff" />
+        </div>
+        <span style={styles.logoText}>EcoExchange</span>
+      </Link>
+
+      {/* Right Side Actions */}
+      <div style={styles.actions}>
+        
+        {/* Sell Button */}
+        <Link to="/post" style={styles.sellBtn}>
+            <FaPlus style={{marginRight: '5px'}}/> Sell
+        </Link>
+
+        {/* User Profile (Since we are private, we KNOW user exists) */}
+        <div style={styles.profileSection}>
+            <Link to="/profile">
+               {/* Display Google Profile Pic */}
+               <img src={user.picture} alt="Profile" style={styles.avatar} />
+            </Link>
+            <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+const styles = {
+  nav: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '15px 20px',
+    backgroundColor: '#fff',
+    boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
+    position: 'sticky',
+    top: 0,
+    zIndex: 1000
+  },
+  logo: {
+    display: 'flex',
+    alignItems: 'center',
+    textDecoration: 'none',
+    gap: '10px'
+  },
+  iconContainer: {
+    backgroundColor: '#1B4332',
+    padding: '8px',
+    borderRadius: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  logoText: {
+    fontSize: '1.2rem',
+    fontWeight: '800',
+    color: '#1B4332',
+    letterSpacing: '-0.5px'
+  },
+  actions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px'
+  },
+  sellBtn: {
+    backgroundColor: '#1B4332',
+    color: 'white',
+    padding: '8px 16px',
+    borderRadius: '50px',
+    textDecoration: 'none',
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    display: 'flex',
+    alignItems: 'center',
+    transition: '0.2s'
+  },
+  profileSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  avatar: {
+    width: '35px',
+    height: '35px',
+    borderRadius: '50%',
+    cursor: 'pointer',
+    border: '2px solid #1B4332'
+  },
+  logoutBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#666',
+    fontSize: '0.8rem',
+    cursor: 'pointer',
+    textDecoration: 'underline'
+  }
+};
+
+export default Navbar;
