@@ -7,7 +7,7 @@ function ItemDetail() {
   const [item, setItem] = useState(null);
 
   useEffect(() => {
-    axios.get(`http://localhost:5000/api/items/${id}`)
+    axios.get('https://eco-exchange-api.onrender.com/api/items')
       .then(res => setItem(res.data))
       .catch(err => console.error(err));
   }, [id]);

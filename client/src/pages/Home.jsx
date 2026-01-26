@@ -10,7 +10,7 @@ function Home() {
 
   useEffect(() => {
     // Fetch items from your backend
-    axios.get('http://localhost:5000/api/items')
+    axios.get('https://eco-exchange-api.onrender.com/api/items')
       .then(res => {
         setItems(res.data);
         setLoading(false);
