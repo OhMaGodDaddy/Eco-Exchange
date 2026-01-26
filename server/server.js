@@ -10,13 +10,13 @@ require('./config/passport');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// 🚨 FIX 1: TRUST PROXY (Required for Render + Cookies)
+// 🚨 FIX 1: TRUST PROXY (MANDATORY for Render)
+// Without this, Render blocks the secure cookie because it thinks it's HTTP, not HTTPS.
 app.set('trust proxy', 1);
 
 // --- MIDDLEWARE ---
 
-// 🚨 FIX 2: VERIFY YOUR URLS HERE
-// make sure 'https://eco-exchange-six.vercel.app' is EXACTLY what is in your browser
+// 🚨 FIX 2: VERIFY YOUR URL
 const ALLOWED_ORIGIN = "https://eco-exchange-six.vercel.app"; 
 
 // 1. CORS
@@ -25,7 +25,7 @@ app.use(cors({
         "http://localhost:5173", // Local
         ALLOWED_ORIGIN           // Live
     ],
-    credentials: true // Crucial for cookies
+    credentials: true // Crucial: allows the browser to send the cookie
 }));
 
 // 2. Body Parsers
@@ -38,10 +38,12 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        // 🚨 FIX 3: FORCE SECURE COOKIES ON RENDER
-        secure: true, // Always true for https
-        sameSite: 'none', // Allow cross-site (Render -> Vercel)
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        // 🚨 FIX 3: FORCE SECURE COOKIES
+        // We hardcode these to ensure Chrome accepts the cookie from Render
+        secure: true, 
+        sameSite: 'none', 
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        httpOnly: true // Security best practice
     }
 }));
 
@@ -50,7 +52,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // --- DATABASE CONNECTION ---
-// (Ideally move this password to .env later)
 mongoose.connect("mongodb+srv://KyleCarag:KyleCarag101@cluster0.qynunmn.mongodb.net/eco-exchange?retryWrites=true&w=majority&appName=Cluster0")
     .then(() => console.log("✅ MongoDB Connected Successfully"))
     .catch((err) => console.log("❌ MongoDB Connection Error:", err));
@@ -72,7 +73,6 @@ const itemSchema = new mongoose.Schema({
 const Item = mongoose.model('Item', itemSchema);
 
 // --- AUTH ROUTE VARIABLES ---
-// 🚨 FIX 4: Use the variable we defined above to prevent typos
 const CLIENT_URL = process.env.NODE_ENV === 'production' 
     ? ALLOWED_ORIGIN 
     : "http://localhost:5173";
@@ -82,16 +82,26 @@ const CLIENT_URL = process.env.NODE_ENV === 'production'
 // A. AUTHENTICATION ROUTES
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
+// 🚨 FIX 4: SESSION SAVE (The "Race Condition" Fix)
 app.get('/auth/google/callback', 
     passport.authenticate('google', { failureRedirect: '/' }),
     (req, res) => {
-        // Successful authentication, redirect to the Frontend
-        console.log("✅ User Logged In, Redirecting to:", CLIENT_URL);
-        res.redirect(CLIENT_URL);
+        // We force the session to save to the database BEFORE redirecting.
+        // This prevents the frontend from loading before the login is "official".
+        req.session.save((err) => {
+            if (err) {
+                console.error("Session save error:", err);
+                return res.redirect('/login/failed');
+            }
+            console.log("✅ Session saved. Redirecting to:", CLIENT_URL);
+            res.redirect(CLIENT_URL);
+        });
     }
 );
 
 app.get('/api/current_user', (req, res) => {
+    // This logs on the server so you can debug in Render logs
+    console.log("🔍 Checking user session:", req.user ? "Found User" : "No User");
     res.send(req.user);
 });
 
@@ -102,7 +112,7 @@ app.get('/api/logout', (req, res, next) => {
     });
 });
 
-// B. ITEM ROUTES (Keep these exactly as they were)
+// B. ITEM ROUTES 
 app.get('/api/items', async (req, res) => {
     try {
         const { hub, category } = req.query;

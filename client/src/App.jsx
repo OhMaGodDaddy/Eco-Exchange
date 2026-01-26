@@ -15,7 +15,7 @@ function App() {
         // Note: We MUST include 'credentials: include' to send the cookie!
         const response = await fetch("https://eco-exchange-api.onrender.com/api/current_user", {
             method: "GET",
-            credentials: "include" 
+            credentials: "include" // 👈 THIS IS MANDATORY. If missing, it will always fail.
         });
 
         if (response.ok) {
