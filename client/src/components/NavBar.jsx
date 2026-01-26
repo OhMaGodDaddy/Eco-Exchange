@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { FaLeaf, FaPlus, FaShieldAlt } from 'react-icons/fa'; // Added FaShieldAlt for admin icon
 
 // Receives 'user' and 'onLogout' from App.jsx
-function Navbar({ user, onLogout }) {
+function NavBar({ user, onLogout }) {
   return (
     <nav style={styles.nav}>
       {/* Logo */}
