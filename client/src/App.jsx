@@ -1,50 +1,45 @@
 import { useState, useEffect } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-// ⚠️ MAKE SURE THESE PATHS MATCH YOUR FILES
 import Login from './pages/Login'; 
 import Dashboard from './pages/AdminDashboard'; 
 
 function App() {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // 1. We start in "Loading" mode
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        // 2. We ask the server: "Do I have a cookie?"
+        // 1. Ask the Render server if this browser has a valid session cookie
         const response = await fetch("https://eco-exchange-api.onrender.com/api/current_user", {
             method: "GET",
-            credentials: "include", // 👈 THIS IS CRITICAL. Without it, the cookie stays hidden.
+            credentials: "include", // 👈 CRITICAL: Sends the cookie to the server
             headers: { "Content-Type": "application/json" }
         });
 
         if (response.ok) {
           const data = await response.json();
-          // 3. If the server sends back a user, we save it!
+          // 2. If user data exists, update the state to show the Dashboard
           if (data && data._id) {
-            console.log("✅ User found:", data.displayName);
             setUser(data);
           }
         }
       } catch (error) {
-        console.error("❌ Error checking login:", error);
+        console.error("Login check failed:", error);
       } finally {
-        setLoading(false); // 4. Stop loading (whether logged in or not)
+        setLoading(false);
       }
     };
 
     fetchUser();
   }, []);
 
-  // 5. While checking, show a simple Loading text (so it doesn't flash the Login page)
-  if (loading) {
-    return <div style={{ color: 'white', textAlign: 'center', marginTop: '20%' }}>Loading...</div>;
-  }
+  if (loading) return <div style={{color:'white', textAlign:'center', marginTop:'20%'}}>Checking Session...</div>;
 
   return (
-    <GoogleOAuthProvider clientId="YOUR_GOOGLE_CLIENT_ID">
+    <GoogleOAuthProvider clientId="YOUR_CLIENT_ID_HERE">
       <div className="app">
-        {/* 6. If user exists, show Dashboard. If not, show Login. */}
+        {/* 3. Logic: If user is logged in, show Dashboard. Otherwise, show Login. */}
         {user ? <Dashboard user={user} /> : <Login />}
       </div>
     </GoogleOAuthProvider>
