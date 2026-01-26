@@ -1,56 +1,51 @@
 import { useState, useEffect } from 'react';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-// Import your pages (adjust these paths to match your project!)
+// ⚠️ MAKE SURE THESE PATHS MATCH YOUR FILES
 import Login from './pages/Login'; 
 import Dashboard from './pages/AdminDashboard'; 
 
 function App() {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // Add a loading state
+  const [loading, setLoading] = useState(true); // 1. We start in "Loading" mode
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        // 👇 THIS IS THE MISSING PIECE!
+        // 2. We ask the server: "Do I have a cookie?"
         const response = await fetch("https://eco-exchange-api.onrender.com/api/current_user", {
             method: "GET",
-            credentials: "include", // 👈 MANDATORY: Sends the cookie to the server
-            headers: {
-              "Content-Type": "application/json"
-            }
+            credentials: "include", // 👈 THIS IS CRITICAL. Without it, the cookie stays hidden.
+            headers: { "Content-Type": "application/json" }
         });
 
         if (response.ok) {
           const data = await response.json();
+          // 3. If the server sends back a user, we save it!
           if (data && data._id) {
-            console.log("✅ Logged in as:", data.userName);
+            console.log("✅ User found:", data.displayName);
             setUser(data);
           }
         }
       } catch (error) {
-        console.error("Login check failed:", error);
+        console.error("❌ Error checking login:", error);
       } finally {
-        setLoading(false); // Stop loading whether we found a user or not
+        setLoading(false); // 4. Stop loading (whether logged in or not)
       }
     };
 
     fetchUser();
   }, []);
 
-  // 1. Show a loader while checking (Optional but looks better)
-  if (loading) return <div style={{color:'white', textAlign:'center', marginTop:'20%'}}>Loading...</div>;
+  // 5. While checking, show a simple Loading text (so it doesn't flash the Login page)
+  if (loading) {
+    return <div style={{ color: 'white', textAlign: 'center', marginTop: '20%' }}>Loading...</div>;
+  }
 
-  // 2. Main Logic
   return (
-    <GoogleOAuthProvider clientId="YOUR_CLIENT_ID">
+    <GoogleOAuthProvider clientId="YOUR_GOOGLE_CLIENT_ID">
       <div className="app">
-        {user ? (
-          // If we have a user, show the Dashboard
-          <Dashboard user={user} />
-        ) : (
-          // If no user, show the Login page
-          <Login />
-        )}
+        {/* 6. If user exists, show Dashboard. If not, show Login. */}
+        {user ? <Dashboard user={user} /> : <Login />}
       </div>
     </GoogleOAuthProvider>
   );
