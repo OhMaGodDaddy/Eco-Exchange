@@ -3,6 +3,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { BrowserRouter as Router } from 'react-router-dom'; // 👈 ADD THIS
 import Login from './pages/Login'; 
 import Dashboard from './pages/AdminDashboard'; 
+import ItemGallery from './pages/ItemGallery'; // Import the new file
 
 function App() {
   const [user, setUser] = useState(null);
@@ -35,18 +36,35 @@ function App() {
   if (loading) return <div style={{color:'white', textAlign:'center', marginTop:'20%'}}>Checking Session...</div>;
 
   return (
-    <GoogleOAuthProvider clientId="YOUR_CLIENT_ID_HERE">
-      <Router> {/* 👈 THIS FIXES THE WHITE SCREEN ERROR */}
+    <GoogleOAuthProvider clientId="YOUR_CLIENT_ID">
+      <Router>
         <div className="app">
-          {user ? (
+          {!user ? (
+            <Login />
+          ) : user.role === 'admin' ? (
             <Dashboard user={user} />
           ) : (
-            <Login />
+            <UserHome user={user} /> // 👈 Create a simple UserHome or Redirect
           )}
         </div>
       </Router>
     </GoogleOAuthProvider>
   );
+
+  return (
+  <Router>
+    <div className="app">
+      {!user ? (
+        <Login />
+      ) : user.role === 'admin' ? (
+        <Dashboard user={user} /> // 🛡️ You see the full management view
+      ) : (
+        <ItemGallery user={user} /> // 📦 Regular users see the item list
+      )}
+    </div>
+  </Router>
+);
+
 }
 
 export default App;

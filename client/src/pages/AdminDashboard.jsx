@@ -30,6 +30,23 @@ function AdminDashboard({ user }) {
     }
   };
 
+  const deleteItem = async (itemId) => {
+    if (window.confirm("Are you sure you want to delete this item?")) {
+        const response = await fetch(`https://eco-exchange-api.onrender.com/api/items/${itemId}`, {
+            method: 'DELETE',
+            credentials: 'include' // 👈 Essential for the server to know WHO is deleting
+        });
+
+        if (response.ok) {
+            // Refresh your list of items here
+            alert("Deleted!");
+            setItems(items.filter(item => item._id !== itemId));
+        } else {
+            alert("Failed to delete.");
+        }
+    }
+};
+
   const handleDeleteItem = async (id) => {
     if(window.confirm("Admin: Delete this item?")) {
         await axios.delete(`https://eco-exchange-api.onrender.com/api/items/${id}`);
