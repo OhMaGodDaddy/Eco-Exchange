@@ -20,12 +20,12 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      // CHANGE 1: We use the FULL URL here to prevent "Redirect Mismatch" errors
+      // THIS URL MUST MATCH YOUR GOOGLE CLOUD SCREENSHOT EXACTLY:
       callbackURL: 'https://eco-exchange-api.onrender.com/auth/google/callback',
       scope: ['profile', 'email']
     },
     async (accessToken, refreshToken, profile, done) => {
-      // CHANGE 2: Add these console logs to see what is happening!
+      // 🔍 DEBUG LOGS: This will print to your Render Dashboard
       console.log("🌟 GOOGLE LOGIN ATTEMPT DETECTED!");
       console.log("👤 Profile ID:", profile.id);
       
@@ -38,6 +38,7 @@ passport.use(
         }
 
         console.log("🆕 Creating NEW User...");
+        // This is the code that actually saves to MongoDB
         user = await User.create({
           googleId: profile.id,
           displayName: profile.displayName,
