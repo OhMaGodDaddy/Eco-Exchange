@@ -1,13 +1,12 @@
-import { GoogleLogin } from '@react-oauth/google';
-import { jwtDecode } from "jwt-decode";
-import { FaLeaf } from 'react-icons/fa';
+import { FaLeaf, FaGoogle } from 'react-icons/fa'; // Make sure to install: npm install react-icons
 
-function Login({ onLogin }) {
+function Login() {
   
-  const handleSuccess = (credentialResponse) => {
-    const decoded = jwtDecode(credentialResponse.credential);
-    console.log("Login Success:", decoded);
-    onLogin(decoded); // Tell App.jsx we are logged in!
+  const handleGoogleLogin = () => {
+    // 🚀 THIS IS THE KEY CHANGE!
+    // We send the user to YOUR Render Backend to start the login process.
+    // This forces the backend code (passport.js) to run and save the user.
+    window.open("https://eco-exchange-api.onrender.com/auth/google", "_self");
   };
 
   return (
@@ -23,16 +22,12 @@ function Login({ onLogin }) {
           Buy, sell, and recycle within your hub.
         </p>
 
-        {/* Google Button */}
+        {/* Custom Google Button that links to Backend */}
         <div style={styles.buttonContainer}>
-          <GoogleLogin
-            onSuccess={handleSuccess}
-            onError={() => console.log('Login Failed')}
-            size="large"
-            theme="filled_black"
-            text="signin_with"
-            shape="pill"
-          />
+          <button onClick={handleGoogleLogin} style={styles.googleButton}>
+            <FaGoogle style={{ marginRight: '10px' }} />
+            Sign in with Google
+          </button>
         </div>
         
         <p style={styles.footer}>Safe • Secure • Sustainable</p>
@@ -84,6 +79,23 @@ const styles = {
     display: 'flex',
     justifyContent: 'center',
     marginBottom: '20px'
+  },
+  // New Style for the Custom Button
+  googleButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4285F4', // Google Blue
+    color: 'white',
+    border: 'none',
+    padding: '12px 24px',
+    borderRadius: '50px',
+    fontSize: '16px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    width: '100%',
+    maxWidth: '250px',
+    transition: 'background 0.3s'
   },
   footer: {
     color: '#aaa',
