@@ -4,28 +4,32 @@ import { Link } from 'react-router-dom';
 
 function Profile({ user }) {
   const [activeTab, setActiveTab] = useState('listings');
-  const [myListings, setMyListings] = useState([]); // 👈 Stores your items
+  const [myListings, setMyListings] = useState([]); 
   const [loading, setLoading] = useState(true);
 
-  // 1. Fetch items when the profile loads
   useEffect(() => {
     const fetchMyItems = async () => {
       try {
         const response = await fetch("https://eco-exchange-api.onrender.com/api/items");
         const data = await response.json();
         
-        // 🔍 DEBUGGING LOGS (Check your browser console!)
-        console.log("---------------- DEBUGGING PROFILE ----------------");
-        console.log("1. My User ID:", user._id);
-        console.log("2. Total Items Found:", data.length);
+        // 🔍 DEBUGGING: INSPECT THE NEWEST ITEM
+        // This prints the "Banana" you just posted so we can see the correct field name
         if (data.length > 0) {
-            console.log("3. First Item's Giver ID:", data[0].giver_id);
-            console.log("4. Do they match?", data[0].giver_id === user._id);
+            const newestItem = data[data.length - 1]; 
+            console.log("---------------- INSPECTING NEWEST ITEM ----------------");
+            console.log("1. Newest Item Name:", newestItem.name);
+            console.log("2. WE ARE LOOKING FOR THIS USER ID:", user._id);
+            console.log("3. FULL ITEM DATA (Open this to see field names):", newestItem);
+            console.log("--------------------------------------------------------");
         }
-        console.log("---------------------------------------------------");
 
-        // Filter items where the giver_id matches your user ID
-        const myItems = data.filter(item => item.giver_id === user._id);
+        // 🧠 SMART FILTER: Checks common names for the ID
+        const myItems = data.filter(item => {
+            // Check all likely field names
+            const itemCreatorId = item.giver_id || item.userId || item.owner || item.poster || item.user;
+            return itemCreatorId === user._id;
+        });
         
         setMyListings(myItems);
       } catch (error) {
@@ -38,9 +42,9 @@ function Profile({ user }) {
     if (user) fetchMyItems();
   }, [user]);
 
-  // 2. Calculate Stats
+  // Stats
   const sharedCount = myListings.length;
-  const impactScore = sharedCount * 12; // Example: 12kg CO2 saved per item
+  const impactScore = sharedCount * 12; 
 
   if (!user) return <div style={{color:'white', textAlign:'center', marginTop:'50px'}}>Loading...</div>;
 
@@ -65,7 +69,7 @@ function Profile({ user }) {
         </div>
       </div>
 
-      {/* Stats Row - NOW DYNAMIC! */}
+      {/* Stats Row */}
       <div style={styles.statsContainer}>
         <div style={styles.statBox}>
           <h3 style={{ color: '#2E8B57', margin: '0 0 5px 0' }}>{sharedCount}</h3>
@@ -106,10 +110,10 @@ function Profile({ user }) {
                 {myListings.length > 0 ? (
                     myListings.map(item => (
                         <div key={item._id} style={styles.itemRow}>
-                            <div style={styles.itemIcon}>🍌</div> {/* Placeholder icon */}
+                            <div style={styles.itemIcon}>🍌</div>
                             <div>
                                 <strong>{item.name}</strong>
-                                <div style={{fontSize: '0.8rem', color: '#666'}}>{item.category}</div>
+                                <div style={{fontSize: '0.8rem', color: '#666'}}>{item.category || 'Item'}</div>
                             </div>
                             <span style={styles.badge}>Active</span>
                         </div>
@@ -145,7 +149,6 @@ const styles = {
   iconBox: { width: '32px', height: '32px', backgroundColor: '#E6FFFA', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: '12px' },
   contentArea: { marginTop: '20px', backgroundColor: 'white', borderRadius: '16px', minHeight: '150px', boxShadow: '0 2px 10px rgba(0,0,0,0.03)' },
   postBtn: { backgroundColor: '#2E8B57', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', marginTop: '10px', fontWeight: 'bold' },
-  // New Styles for the list
   itemRow: { display: 'flex', alignItems: 'center', padding: '10px', borderBottom: '1px solid #eee', gap: '15px' },
   itemIcon: { fontSize: '1.5rem' },
   badge: { marginLeft: 'auto', backgroundColor: '#e6fffa', color: '#2E8B57', padding: '4px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 'bold' }
