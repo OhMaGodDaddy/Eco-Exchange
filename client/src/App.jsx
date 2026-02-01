@@ -6,6 +6,10 @@ import Home from './pages/Home';
 import NavBar from './components/NavBar'; 
 import PostItem from './pages/PostItem'; 
 import ItemDetail from './pages/ItemDetail'; // 👈 1. IMPORT THE NEW PAGE
+import Profile from './pages/Profile';
+
+
+
 
 function App() {
   const [user, setUser] = useState(null);
