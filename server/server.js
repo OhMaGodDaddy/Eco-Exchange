@@ -183,7 +183,9 @@ app.get('/api/hubs', (req, res) => {
     res.json(hubs);
 });
 
-// --- CHAT ROUTES ---
+// ===========================================
+// 👇 UPDATED CHAT ROUTES (Paste this over the old ones)
+// ===========================================
 
 // 1. Send a Message
 app.post('/api/messages', async (req, res) => {
@@ -191,15 +193,23 @@ app.post('/api/messages', async (req, res) => {
 
     try {
         const { receiverId, text } = req.body;
+        
+        // Safety Check: Ensure we have valid data
+        if (!receiverId || !text) {
+            return res.status(400).json({ error: "Missing receiverId or text" });
+        }
+
         const newMessage = new Message({
-            senderId: req.user._id,
-            senderName: req.user.displayName,
-            receiverId: receiverId,
+            senderId: req.user._id.toString(), // 👈 Explicit conversion to String
+            senderName: req.user.displayName || "Anonymous",
+            receiverId: receiverId.toString(),
             text: text
         });
+
         await newMessage.save();
         res.status(201).json(newMessage);
     } catch (err) {
+        console.error("❌ Send Message Error:", err); // This prints to Render Logs
         res.status(500).json({ error: err.message });
     }
 });
@@ -212,16 +222,19 @@ app.get('/api/messages/:friendId', async (req, res) => {
         const myId = req.user._id.toString();
         const friendId = req.params.friendId;
 
-        // Find messages where (Sender is Me AND Receiver is Friend) OR (Sender is Friend AND Receiver is Me)
+        // Log who is talking (Check your Render logs to see this!)
+        console.log(`💬 Fetching chat: ${req.user.displayName} (${myId}) <-> ${friendId}`);
+
         const messages = await Message.find({
             $or: [
                 { senderId: myId, receiverId: friendId },
                 { senderId: friendId, receiverId: myId }
             ]
-        }).sort({ timestamp: 1 }); // Sort by oldest to newest
+        }).sort({ timestamp: 1 });
 
         res.json(messages);
     } catch (err) {
+        console.error("❌ Fetch Messages Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
