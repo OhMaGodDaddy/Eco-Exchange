@@ -81,14 +81,13 @@ function ItemDetail({ user }) {
               🗑 Delete This Listing
             </button>
           ) : (
-            <a 
-              href={`mailto:${item.userEmail}?subject=EcoExchange: Interested in ${item.title}`}
-              style={{ textDecoration: 'none' }}
+            // 👇 THIS BUTTON NOW GOES TO CHAT
+            <button 
+              onClick={() => navigate(`/chat/${item.userId}`)} 
+              style={styles.contactBtn}
             >
-              <button style={styles.contactBtn}>
-                ✉️ Email {item.userName ? item.userName.split(' ')[0] : 'Owner'}
-              </button>
-            </a>
+              💬 Chat with Owner
+            </button>
           )}
           
         </div>

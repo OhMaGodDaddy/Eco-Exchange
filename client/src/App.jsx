@@ -7,8 +7,9 @@ import NavBar from './components/NavBar';
 import PostItem from './pages/PostItem'; 
 import ItemDetail from './pages/ItemDetail'; // 👈 1. IMPORT THE NEW PAGE
 import Profile from './pages/Profile';
+import Chat from './pages/Chat'; // 👈 Import this
 
-
+const Message = require('./model/Message');
 
 
 function App() {
@@ -58,6 +59,7 @@ function App() {
                 {/* 👈 2. ADD THIS DYNAMIC ROUTE FOR INDIVIDUAL ITEMS */}
                 <Route path="/item/:id" element={<ItemDetail user={user} />} />
                 <Route path="/profile" element={<Profile user={user} />} />
+                <Route path="/chat/:friendId" element={<Chat user={user} />} /> {/* 👈 Add this */}
               </>
             )}
           </Routes>

@@ -182,6 +182,49 @@ app.get('/api/hubs', (req, res) => {
     res.json(hubs);
 });
 
+// --- CHAT ROUTES ---
+
+// 1. Send a Message
+app.post('/api/messages', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+
+    try {
+        const { receiverId, text } = req.body;
+        const newMessage = new Message({
+            senderId: req.user._id,
+            senderName: req.user.displayName,
+            receiverId: receiverId,
+            text: text
+        });
+        await newMessage.save();
+        res.status(201).json(newMessage);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Get Messages between two users
+app.get('/api/messages/:friendId', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+
+    try {
+        const myId = req.user._id.toString();
+        const friendId = req.params.friendId;
+
+        // Find messages where (Sender is Me AND Receiver is Friend) OR (Sender is Friend AND Receiver is Me)
+        const messages = await Message.find({
+            $or: [
+                { senderId: myId, receiverId: friendId },
+                { senderId: friendId, receiverId: myId }
+            ]
+        }).sort({ timestamp: 1 }); // Sort by oldest to newest
+
+        res.json(messages);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`Server is running on port: ${PORT}`);
 });
