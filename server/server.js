@@ -223,7 +223,7 @@ app.get('/api/messages/:friendId', async (req, res) => {
 
 // ============================================
 // 🤖 NEW AI ROUTE: GENERATE DESCRIPTION
-// ============================================
+// ============================================ 
 
 // ⚠️ PASTE YOUR API KEY HERE
 const genAI = new GoogleGenerativeAI("AIzaSyBB_STUMKuFi9epji95RKtKi5J5sQxb94Q"); 
@@ -233,8 +233,7 @@ app.post('/api/generate-description', async (req, res) => {
         const { title, category } = req.body;
         
         // 1. Initialize Model
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         // 2. Create the Prompt
         const prompt = `Write a short, engaging, and professional sales description for a second-hand item being sold on an eco-friendly marketplace.
         
