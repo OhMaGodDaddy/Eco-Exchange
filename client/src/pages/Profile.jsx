@@ -14,20 +14,18 @@ function Profile({ user }) {
         const data = await response.json();
         
         // 🔍 DEBUGGING: INSPECT THE NEWEST ITEM
-        // This prints the "Banana" you just posted so we can see the correct field name
         if (data.length > 0) {
             const newestItem = data[data.length - 1]; 
             console.log("---------------- INSPECTING NEWEST ITEM ----------------");
-            console.log("1. Newest Item Name:", newestItem.name);
-            console.log("2. WE ARE LOOKING FOR THIS USER ID:", user._id);
-            console.log("3. FULL ITEM DATA (Open this to see field names):", newestItem);
+            console.log("1. Item Title:", newestItem.title);
+            console.log("2. Item ID Keys:", Object.keys(newestItem)); // 👈 This lists all field names
+            console.log("3. User ID we want to match:", user._id);
             console.log("--------------------------------------------------------");
         }
 
-        // 🧠 SMART FILTER: Checks common names for the ID
+        // 🧠 SMART FILTER: Checks all common ID names
         const myItems = data.filter(item => {
-            // Check all likely field names
-            const itemCreatorId = item.giver_id || item.userId || item.owner || item.poster || item.user;
+            const itemCreatorId = item.giver_id || item.userId || item.owner || item.user || item.poster;
             return itemCreatorId === user._id;
         });
         
@@ -112,7 +110,8 @@ function Profile({ user }) {
                         <div key={item._id} style={styles.itemRow}>
                             <div style={styles.itemIcon}>🍌</div>
                             <div>
-                                <strong>{item.name}</strong>
+                                {/* FIX: USE TITLE INSTEAD OF NAME */}
+                                <strong>{item.title || item.name}</strong>
                                 <div style={{fontSize: '0.8rem', color: '#666'}}>{item.category || 'Item'}</div>
                             </div>
                             <span style={styles.badge}>Active</span>
