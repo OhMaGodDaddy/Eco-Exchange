@@ -14,8 +14,17 @@ function Profile({ user }) {
         const response = await fetch("https://eco-exchange-api.onrender.com/api/items");
         const data = await response.json();
         
-        // Filter items that belong to the logged-in user
-        // We check if the item's 'giver_id' matches your user ID
+        // 🔍 DEBUGGING LOGS (Check your browser console!)
+        console.log("---------------- DEBUGGING PROFILE ----------------");
+        console.log("1. My User ID:", user._id);
+        console.log("2. Total Items Found:", data.length);
+        if (data.length > 0) {
+            console.log("3. First Item's Giver ID:", data[0].giver_id);
+            console.log("4. Do they match?", data[0].giver_id === user._id);
+        }
+        console.log("---------------------------------------------------");
+
+        // Filter items where the giver_id matches your user ID
         const myItems = data.filter(item => item.giver_id === user._id);
         
         setMyListings(myItems);
