@@ -4,8 +4,9 @@ const mongoose = require('mongoose');
 const passport = require('passport'); 
 const session = require('express-session');
 
-// 1. IMPORT USER MODEL (Ensure the path is correct)
+// 1. IMPORT MODELS (This is the Fix!)
 const User = require('./model/User'); 
+const Item = require('./model/Item'); // 👈 We now use the REAL Item file!
 
 // Import the Passport Config
 require('./config/passport'); 
@@ -13,11 +14,9 @@ require('./config/passport');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// 🚨 FIX 1: TRUST PROXY (MANDATORY for Render)
 app.set('trust proxy', 1);
 
 // --- MIDDLEWARE ---
-
 const ALLOWED_ORIGIN = "https://eco-exchange-six.vercel.app"; 
 
 app.use(cors({
@@ -59,21 +58,10 @@ mongoose.connect("mongodb+srv://KyleCarag:KyleCarag101@cluster0.qynunmn.mongodb.
     .then(() => console.log("✅ MongoDB Connected Successfully"))
     .catch((err) => console.log("❌ MongoDB Connection Error:", err));
 
-// --- DATA MODELS ---
-const itemSchema = new mongoose.Schema({
-    title: { type: String, required: true },
-    description: { type: String },
-    category: { type: String, required: true },
-    condition: { type: String, required: true },
-    hubLocation: { type: String, required: true },
-    price: { type: Number, default: 0 },
-    image: { type: String, default: '' }, 
-    status: { type: String, default: 'Available' },
-    createdAt: { type: Date, default: Date.now },
-    googleId: { type: String }, 
-    userName: { type: String }
-});
-const Item = mongoose.model('Item', itemSchema);
+
+// ❌ DELETED THE DUPLICATE ITEM SCHEMA HERE
+// (We are using the one imported at the top now)
+
 
 const CLIENT_URL = process.env.NODE_ENV === 'production' 
     ? ALLOWED_ORIGIN 
@@ -92,7 +80,6 @@ app.get('/auth/google/callback',
                 console.error("Session save error:", err);
                 return res.redirect('/login/failed');
             }
-            console.log("✅ Session saved. Redirecting to:", CLIENT_URL);
             res.redirect(CLIENT_URL);
         });
     }
@@ -137,8 +124,10 @@ app.post('/api/items', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
     
     try {
+        // The frontend now sends 'userId', so we just pass req.body!
         const itemData = {
             ...req.body,
+            // We add these just in case, but userId is the important one now
             googleId: req.user.googleId,
             userName: req.user.displayName
         };
@@ -146,11 +135,12 @@ app.post('/api/items', async (req, res) => {
         await newItem.save();
         res.status(201).json(newItem);
     } catch (err) {
+        console.error("Error saving item:", err);
         res.status(400).json({ error: err.message });
     }
 });
 
-// 🚨 UPDATED DELETE ROUTE: Handles both Owner and Admin
+// 🚨 UPDATED DELETE ROUTE: Now checks userId instead of googleId
 app.delete('/api/items/:id', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Unauthorized" });
 
@@ -158,7 +148,8 @@ app.delete('/api/items/:id', async (req, res) => {
         const item = await Item.findById(req.params.id);
         if (!item) return res.status(404).json({ message: "Item not found" });
 
-        const isOwner = item.googleId === req.user.googleId;
+        // 👇 UPDATED: Check if the item's userId matches the logged-in user's ID
+        const isOwner = item.userId === req.user._id.toString();
         const isSystemAdmin = req.user.role === 'admin';
 
         if (isOwner || isSystemAdmin) {
@@ -172,9 +163,8 @@ app.delete('/api/items/:id', async (req, res) => {
     }
 });
 
-// C. ADMIN ONLY ROUTES (Example)
+// C. ADMIN ONLY ROUTES
 app.get('/api/admin/stats', isAdmin, async (req, res) => {
-    // Only admins can access this
     const totalItems = await Item.countDocuments();
     res.json({ totalItems });
 });
