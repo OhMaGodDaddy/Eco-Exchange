@@ -5,6 +5,9 @@ const passport = require('passport');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 
+// 👇 1. IMPORT GOOGLE AI LIBRARY
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
 // 1. IMPORT MODELS
 const User = require('./model/User'); 
 const Item = require('./model/Item'); 
@@ -124,12 +127,10 @@ app.post('/api/items', async (req, res) => {
 
 // 3. MESSAGING ROUTES (Inbox & Chat)
 
-// 👇 NEW: Check for unread messages (Red Dot Logic)
 app.get('/api/messages/unread', async (req, res) => {
     if (!req.isAuthenticated()) return res.json({ count: 0 });
     try {
         const myId = req.user._id.toString();
-        // Count messages sent TO me that are NOT read
         const count = await Message.countDocuments({ 
             receiverId: myId, 
             isRead: false 
@@ -140,14 +141,11 @@ app.get('/api/messages/unread', async (req, res) => {
     }
 });
 
-// 👇 NEW: Mark messages as read (When you open a chat)
 app.put('/api/messages/read/:senderId', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send();
     try {
         const myId = req.user._id.toString();
         const otherId = req.params.senderId;
-        
-        // Update all messages from this person to "Read"
         await Message.updateMany(
             { senderId: otherId, receiverId: myId, isRead: false },
             { $set: { isRead: true } }
@@ -197,7 +195,7 @@ app.post('/api/messages', async (req, res) => {
             senderName: req.user.displayName || "Anonymous",
             receiverId: receiverId.toString(),
             text: text,
-            isRead: false // Explicitly set unread
+            isRead: false 
         });
         await newMessage.save();
         res.status(201).json(newMessage);
@@ -222,6 +220,45 @@ app.get('/api/messages/:friendId', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// ============================================
+// 🤖 NEW AI ROUTE: GENERATE DESCRIPTION
+// ============================================
+
+// ⚠️ PASTE YOUR API KEY HERE
+const genAI = new GoogleGenerativeAI("AIzaSyBB_STUMKuFi9epji95RKtKi5J5sQxb94Q"); 
+
+app.post('/api/generate-description', async (req, res) => {
+    try {
+        const { title, category } = req.body;
+        
+        // 1. Initialize Model
+        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+        // 2. Create the Prompt
+        const prompt = `Write a short, engaging, and professional sales description for a second-hand item being sold on an eco-friendly marketplace.
+        
+        Item Title: ${title}
+        Category: ${category || "General"}
+        
+        The description should be 2-3 sentences long. Mention that it is a sustainable choice. Do not use hashtags.`;
+
+        // 3. Generate Content
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        // 4. Send back to Frontend
+        res.json({ description: text });
+
+    } catch (error) {
+        console.error("AI Error:", error);
+        res.status(500).json({ error: "Failed to generate description" });
+    }
+});
+
+// ============================================
+
 
 app.listen(PORT, () => {
     console.log(`Server is running on port: ${PORT}`);
