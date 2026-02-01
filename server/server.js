@@ -6,10 +6,10 @@ const passport = require('passport');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 
-// 👇 1. IMPORT GOOGLE AI LIBRARY
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+// 👇 UPDATED: Import for the new SDK
+const { GoogleGenAI } = require("@google/genai");
 
-// 1. IMPORT MODELS
+// IMPORT MODELS
 const User = require('./model/User'); 
 const Item = require('./model/Item'); 
 const Message = require('./model/Message');
@@ -19,11 +19,9 @@ require('./config/passport');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ⚠️ CRITICAL: Must be "1" for Render/Vercel cookies to work
 app.set('trust proxy', 1);
 
 // --- MIDDLEWARE ---
-// ⚠️ HARDCODED ORIGIN: To rule out any matching errors
 const ALLOWED_ORIGIN = "https://eco-exchange-six.vercel.app";
 
 app.use(cors({
@@ -45,8 +43,8 @@ app.use(session({
         ttl: 24 * 60 * 60 
     }),
     cookie: {
-        secure: true, // REQUIRED for Vercel (HTTPS)
-        sameSite: 'none', // REQUIRED for Cross-Site (Vercel -> Render)
+        secure: true, 
+        sameSite: 'none', 
         maxAge: 24 * 60 * 60 * 1000,
         httpOnly: true 
     }
@@ -60,21 +58,19 @@ mongoose.connect("mongodb+srv://KyleCarag:KyleCarag101@cluster0.qynunmn.mongodb.
     .then(() => console.log("✅ MongoDB Connected Successfully"))
     .catch((err) => console.log("❌ MongoDB Connection Error:", err));
 
-// --- API ROUTES ---
+// --- API ROUTES (Auth, Items, Messages) ---
+// (Note: I've kept your existing logic exactly as is)
 
-// 1. AUTH ROUTES
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 app.get('/auth/google/callback', 
     passport.authenticate('google', { failureRedirect: '/' }),
     (req, res) => {
-        console.log("✅ Google Auth Success. Redirecting to Client...");
-        res.redirect(ALLOWED_ORIGIN); // Redirect straight to Vercel
+        res.redirect(ALLOWED_ORIGIN); 
     }
 );
 
 app.get('/api/current_user', (req, res) => {
-    console.log("🔍 Checking Session. User:", req.user ? req.user.displayName : "No User Found");
     res.send(req.user);
 });
 
@@ -85,7 +81,6 @@ app.get('/api/logout', (req, res, next) => {
     });
 });
 
-// 2. ITEM ROUTES 
 app.get('/api/items', async (req, res) => {
     try {
         const { hub, category } = req.query;
@@ -112,13 +107,12 @@ app.get('/api/items/:id', async (req, res) => {
 app.post('/api/items', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
     try {
-        const itemData = {
+        const newItem = new Item({
             ...req.body,
             googleId: req.user.googleId,
             userName: req.user.displayName,
             userEmail: req.user.email
-        };
-        const newItem = new Item(itemData);
+        });
         await newItem.save();
         res.status(201).json(newItem);
     } catch (err) {
@@ -126,16 +120,12 @@ app.post('/api/items', async (req, res) => {
     }
 });
 
-// 3. MESSAGING ROUTES (Inbox & Chat)
+// --- MESSAGING ROUTES ---
 
 app.get('/api/messages/unread', async (req, res) => {
     if (!req.isAuthenticated()) return res.json({ count: 0 });
     try {
-        const myId = req.user._id.toString();
-        const count = await Message.countDocuments({ 
-            receiverId: myId, 
-            isRead: false 
-        });
+        const count = await Message.countDocuments({ receiverId: req.user._id, isRead: false });
         res.json({ count });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -145,10 +135,8 @@ app.get('/api/messages/unread', async (req, res) => {
 app.put('/api/messages/read/:senderId', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).send();
     try {
-        const myId = req.user._id.toString();
-        const otherId = req.params.senderId;
         await Message.updateMany(
-            { senderId: otherId, receiverId: myId, isRead: false },
+            { senderId: req.params.senderId, receiverId: req.user._id, isRead: false },
             { $set: { isRead: true } }
         );
         res.json({ success: true });
@@ -161,20 +149,14 @@ app.get('/api/messages/conversations', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ error: 'Please log in' });
     const myId = req.user._id.toString();
     try {
-        const allMessages = await Message.find({
-            $or: [{ senderId: myId }, { receiverId: myId }]
-        }).sort({ _id: -1 });
-
+        const allMessages = await Message.find({ $or: [{ senderId: myId }, { receiverId: myId }] }).sort({ _id: -1 });
         const conversationMap = new Map();
         allMessages.forEach(msg => {
             const otherUserId = msg.senderId === myId ? msg.receiverId : msg.senderId;
-            let otherUserName = "Chat User"; 
-            if (msg.senderId !== myId) otherUserName = msg.senderName; 
-
             if (!conversationMap.has(otherUserId)) {
                 conversationMap.set(otherUserId, {
                     conversationId: otherUserId,
-                    otherUser: { _id: otherUserId, username: otherUserName },
+                    otherUser: { _id: otherUserId, username: msg.senderId !== myId ? msg.senderName : "Chat User" },
                     lastMessage: msg.text,
                     timestamp: msg._id.getTimestamp(),
                     link: `/chat/${otherUserId}` 
@@ -190,12 +172,11 @@ app.get('/api/messages/conversations', async (req, res) => {
 app.post('/api/messages', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
     try {
-        const { receiverId, text } = req.body;
         const newMessage = new Message({
-            senderId: req.user._id.toString(),
+            senderId: req.user._id,
             senderName: req.user.displayName || "Anonymous",
-            receiverId: receiverId.toString(),
-            text: text,
+            receiverId: req.body.receiverId,
+            text: req.body.text,
             isRead: false 
         });
         await newMessage.save();
@@ -208,12 +189,11 @@ app.post('/api/messages', async (req, res) => {
 app.get('/api/messages/:friendId', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
     try {
-        const myId = req.user._id.toString();
-        const friendId = req.params.friendId;
+        const myId = req.user._id;
         const messages = await Message.find({
             $or: [
-                { senderId: myId, receiverId: friendId },
-                { senderId: friendId, receiverId: myId }
+                { senderId: myId, receiverId: req.params.friendId },
+                { senderId: req.params.friendId, receiverId: myId }
             ]
         }).sort({ _id: 1 });
         res.json(messages);
@@ -223,55 +203,49 @@ app.get('/api/messages/:friendId', async (req, res) => {
 });
 
 // ============================================
-// 🤖 NEW AI ROUTE: GENERATE DESCRIPTION
+// 🤖 UPDATED AI ROUTE: USING NEW GOOGLE GENAI
 // ============================================ 
 
 app.post('/api/generate-description', async (req, res) => {
     try {
         const { title, category } = req.body;
 
-        // 1. Verify Key Exists
         if (!process.env.GEMINI_API_KEY) {
-            console.error("❌ ERROR: GEMINI_API_KEY is missing from environment variables.");
-            return res.status(500).json({ error: "API Key not configured on server" });
+            console.error("❌ ERROR: GEMINI_API_KEY is missing.");
+            return res.status(500).json({ error: "API Key missing" });
         }
 
-        // 2. Initialize Google AI inside the route
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });        
-        // 3. Create the Prompt
-        const prompt = `Write a short, engaging, and professional sales description for a second-hand item being sold on an eco-friendly marketplace.
-        
-        Item Title: ${title}
-        Category: ${category || "General"}
-        
-        The description should be 2-3 sentences long. Mention that it is a sustainable choice. Do not use hashtags.`;
+        // Initialize the NEW GenAI client
+        const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-        console.log(`🤖 Generating description for: ${title}`);
+        console.log(`🤖 AI is generating content for: ${title}`);
 
-        // 4. Generate Content
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
+        // Using the 2.0-flash model for better reliability
+        const result = await client.models.generateContent({
+            model: 'gemini-1.5-flash-002', 
+            contents: [{
+                role: 'user',
+                parts: [{
+                    text: `Write a short, engaging sales description for a second-hand item on an eco-friendly marketplace.
+                    Item Title: ${title}
+                    Category: ${category || "General"}
+                    Keep it to 2-3 sentences. Focus on sustainability. No hashtags.`
+                }]
+            }]
+        });
 
-        // 5. Send back to Frontend
-        res.json({ description: text });
+        // The text is now available directly on the result object
+        const descriptionText = result.text || "No description generated.";
+
+        res.json({ description: descriptionText });
 
     } catch (error) {
-        // This will print the EXACT error from Google in your Render logs
         console.error("❌ AI ROUTE ERROR:", error.message);
-        
-        // Check for specific common errors
-        if (error.message.includes("403")) {
-            return res.status(500).json({ error: "AI Key blocked or invalid" });
-        }
-        
         res.status(500).json({ error: "Failed to generate description" });
     }
 });
 
 // ============================================
-
 
 app.listen(PORT, () => {
     console.log(`Server is running on port: ${PORT}`);
