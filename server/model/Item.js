@@ -9,7 +9,7 @@ const itemSchema = new mongoose.Schema({
     price: { type: Number, default: 0 },
     image: { type: String, default: '' },
     status: { type: String, default: 'Available' },
-    
+    userEmail: { type: String },
     // 👇 THIS IS THE CRITICAL LINE THAT WAS MISSING!
     userId: { type: String, required: true }, 
     

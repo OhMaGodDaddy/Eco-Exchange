@@ -129,7 +129,9 @@ app.post('/api/items', async (req, res) => {
             ...req.body,
             // We add these just in case, but userId is the important one now
             googleId: req.user.googleId,
-            userName: req.user.displayName
+            userName: req.user.displayName,
+
+            userEmail: req.user.email
         };
         const newItem = new Item(itemData);
         await newItem.save();
