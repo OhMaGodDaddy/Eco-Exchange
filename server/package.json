@@ -10,12 +10,12 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "connect-mongo": "^6.0.0",
+    "connect-mongo": "^5.1.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.2.1",
+    "express": "^4.22.1",
     "express-session": "^1.19.0",
-    "mongoose": "^9.1.5",
+    "mongoose": "^8.22.0",
     "nodemon": "^3.1.11",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0"
