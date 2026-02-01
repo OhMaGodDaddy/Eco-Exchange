@@ -3,7 +3,7 @@ import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { FaSearch, FaMapMarkerAlt, FaTag, FaTrash } from 'react-icons/fa';
 
-// 1. HARDCODED LISTS (Prevents empty dropdowns)
+// 1. HARDCODED LISTS
 const LOCATIONS = [
   "Manila", "Quezon City", "Makati", "Taguig", "Cebu", "Davao", "Pasig", "Other"
 ];
@@ -21,7 +21,7 @@ function Home({ user }) {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedHub, setSelectedHub] = useState("");
 
-  // 2. FETCH ITEMS (With Filter Logic)
+  // 2. FETCH ITEMS
   const fetchItems = async () => {
     setLoading(true);
     try {
@@ -42,14 +42,13 @@ function Home({ user }) {
     }
   };
 
-  // Re-fetch when Category or Hub changes
   useEffect(() => {
     fetchItems();
   }, [selectedCategory, selectedHub]);
 
-  // 3. DELETE HANDLER (From your code)
+  // 3. DELETE HANDLER
   const handleDelete = async (e, itemId) => {
-    e.preventDefault(); // Stop clicking into the item details
+    e.preventDefault();
     if (!window.confirm("Are you sure you want to remove this item?")) return;
 
     try {
@@ -145,7 +144,7 @@ function Home({ user }) {
       {/* --- LISTINGS GRID --- */}
       <div style={styles.listingsSection}>
         <h2 style={styles.sectionTitle}>
-            {selectedCategory || selectedHub ? 'Filtered Results' : 'Recent Listings'}
+            {selectedCategory || selectedHub ? 'Filtered Results' : 'Fresh Listings'}
         </h2>
         
         {loading ? (
@@ -160,7 +159,7 @@ function Home({ user }) {
         ) : (
           <div style={styles.grid}>
             {filteredItems.map(item => {
-                // Determine Image (Robust check)
+                // Determine Image
                 const displayImage = item.images && item.images.length > 0 
                     ? item.images[0] 
                     : (item.image || "https://placehold.co/400x300?text=No+Image");
@@ -178,11 +177,7 @@ function Home({ user }) {
                           style={styles.cardImage}
                           onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }} 
                         />
-                        
-                        {/* Price Tag Logic */}
-                        <span style={item.price > 0 ? styles.priceTag : styles.freeTag}>
-                            {item.price > 0 ? `₱${item.price.toLocaleString()}` : 'Free'}
-                        </span>
+                        {/* 🚫 REMOVED FREE TAG HERE */}
                       </div>
                       
                       <div style={styles.cardContent}>
@@ -224,9 +219,8 @@ const styles = {
     color: 'white', 
     padding: '60px 20px 80px', 
     textAlign: 'center',
-    borderBottomLeftRadius: '30px',
-    borderBottomRightRadius: '30px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+    // Removed border radius to make it look like a clean header block
+    boxShadow: '0 4px 10px rgba(0,0,0,0.1)' 
   },
   heroTitle: { fontSize: '3rem', margin: '0 0 10px', fontWeight: '800' },
   heroSubtitle: { fontSize: '1.1rem', opacity: 0.9, marginBottom: '30px' },
@@ -261,8 +255,13 @@ const styles = {
     padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '0.85rem'
   },
 
-  listingsSection: { maxWidth: '1200px', margin: '-40px auto 40px', padding: '0 20px' },
-  sectionTitle: { fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '20px', color: '#333' },
+  // 👇 UPDATED: Removed negative margin so the text isn't covered
+  listingsSection: { 
+    maxWidth: '1200px', 
+    margin: '30px auto', // Positive margin pushes it down below the hero
+    padding: '0 20px' 
+  },
+  sectionTitle: { fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '25px', color: '#2D3748' },
   
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '25px' },
   
@@ -274,17 +273,10 @@ const styles = {
   },
   imageWrapper: { position: 'relative', height: '200px', backgroundColor: '#eee' },
   cardImage: { width: '100%', height: '100%', objectFit: 'cover' },
-  priceTag: { 
-    position: 'absolute', bottom: '10px', right: '10px', backgroundColor: '#1B4332', 
-    color: 'white', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 'bold' 
-  },
-  freeTag: {
-    position: 'absolute', bottom: '10px', right: '10px', backgroundColor: '#2ecc71', 
-    color: 'white', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 'bold' 
-  },
+  
   cardContent: { padding: '15px', display: 'flex', flexDirection: 'column', flexGrow: 1 },
   cardTitle: { fontSize: '1.1rem', fontWeight: '700', marginBottom: '8px', color: '#2d3748', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  cardMeta: { display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#718096', marginBottom: 'auto' }, // push delete btn down
+  cardMeta: { display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#718096', marginBottom: 'auto' }, 
   
   deleteBtn: {
     backgroundColor: '#fff5f5', color: '#e53e3e', border: '1px solid #fed7d7',
