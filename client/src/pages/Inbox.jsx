@@ -11,7 +11,7 @@ function Inbox() {
         const fetchConversations = async () => {
             try {
                 // Adjust this URL if your backend is running on a different port/url
-                const response = await axios.get('https://eco-exchange-backend.onrender.com/api/messages/conversations', {
+                const response = await axios.get('https://eco-exchange-api.onrender.com/api/messages/conversations', {
                     withCredentials: true
                 });
                 setConversations(response.data);
