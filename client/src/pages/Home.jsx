@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Link } from 'react-router-dom';
-import { FaSearch, FaFilter, FaMapMarkerAlt, FaTag } from 'react-icons/fa';
+import { FaSearch, FaMapMarkerAlt, FaTag } from 'react-icons/fa';
 
-// 1. DEFINED OPTIONS (So they are never empty)
 const LOCATIONS = [
   "Manila", "Quezon City", "Makati", "Taguig", "Cebu", "Davao", "Pasig", "Other"
 ];
@@ -21,7 +20,6 @@ const Home = () => {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedHub, setSelectedHub] = useState("");
 
-  // 2. Fetch Items with Filters
   const fetchItems = async () => {
     setLoading(true);
     try {
@@ -42,12 +40,10 @@ const Home = () => {
     }
   };
 
-  // Trigger fetch when filters change
   useEffect(() => {
     fetchItems();
   }, [selectedCategory, selectedHub]);
 
-  // Client-side search (filters the already fetched list)
   const filteredItems = items.filter(item => 
     item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.description.toLowerCase().includes(searchTerm.toLowerCase())
@@ -61,7 +57,7 @@ const Home = () => {
         <h1 style={styles.heroTitle}>Marketplace</h1>
         <p style={styles.heroSubtitle}>Discover sustainable treasures in your community.</p>
 
-        {/* --- PROFESSIONAL SEARCH BAR --- */}
+        {/* --- SEARCH BAR --- */}
         <div style={styles.searchContainer}>
             <div style={styles.searchWrapper}>
                 <FaSearch style={styles.searchIcon} />
@@ -75,7 +71,7 @@ const Home = () => {
             </div>
         </div>
 
-        {/* --- MODERN FILTER BAR --- */}
+        {/* --- FILTER BAR --- */}
         <div style={styles.filterBar}>
             
             {/* Category Filter */}
@@ -110,7 +106,7 @@ const Home = () => {
                 <div style={styles.dropdownArrow}>▼</div>
             </div>
 
-            {/* Clear Filters Button (Only shows if filter is active) */}
+            {/* Clear Filters */}
             {(selectedCategory || selectedHub) && (
                 <button 
                     onClick={() => { setSelectedCategory(""); setSelectedHub(""); }}
@@ -143,13 +139,22 @@ const Home = () => {
               <Link to={`/item/${item._id}`} key={item._id} style={styles.cardLink}>
                 <div style={styles.card}>
                   <div style={styles.imageWrapper}>
+                    {/* 👇 UPDATED IMAGE LOGIC */}
                     <img 
-                      src={item.images && item.images.length > 0 ? item.images[0] : "https://via.placeholder.com/300?text=No+Image"} 
+                      src={item.images && item.images.length > 0 
+                          ? item.images[0] 
+                          : "https://placehold.co/400x300?text=No+Image"} 
                       alt={item.title} 
                       style={styles.cardImage}
+                      onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }} 
                     />
-                    <span style={styles.priceTag}>₱{item.price}</span>
+                    
+                    {/* 👇 UPDATED PRICE LOGIC (Shows "Free" if 0) */}
+                    <span style={item.price > 0 ? styles.priceTag : styles.freeTag}>
+                        {item.price > 0 ? `₱${item.price.toLocaleString()}` : 'Free'}
+                    </span>
                   </div>
+                  
                   <div style={styles.cardContent}>
                     <h3 style={styles.cardTitle}>{item.title}</h3>
                     <div style={styles.cardMeta}>
@@ -167,7 +172,6 @@ const Home = () => {
   );
 };
 
-// --- STYLES ---
 const styles = {
   container: { minHeight: '100vh', backgroundColor: '#f4f6f8' },
   hero: { 
@@ -195,7 +199,6 @@ const styles = {
   filterBar: { 
     display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', marginTop: '10px' 
   },
-  // Custom Select Wrapper for "Professional" Look
   selectWrapper: {
     position: 'relative', display: 'flex', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)',
     backdropFilter: 'blur(10px)', borderRadius: '30px', padding: '0 15px', border: '1px solid rgba(255,255,255,0.3)'
@@ -225,10 +228,18 @@ const styles = {
   },
   imageWrapper: { position: 'relative', height: '200px', backgroundColor: '#eee' },
   cardImage: { width: '100%', height: '100%', objectFit: 'cover' },
+  
+  // 🏷️ Price Tag (Dark Green)
   priceTag: { 
-    position: 'absolute', bottom: '10px', right: '10px', backgroundColor: 'rgba(0,0,0,0.7)', 
+    position: 'absolute', bottom: '10px', right: '10px', backgroundColor: '#1B4332', 
     color: 'white', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 'bold' 
   },
+  // 🆓 Free Tag (Bright Green)
+  freeTag: {
+    position: 'absolute', bottom: '10px', right: '10px', backgroundColor: '#2ecc71', 
+    color: 'white', padding: '4px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 'bold' 
+  },
+
   cardContent: { padding: '15px' },
   cardTitle: { fontSize: '1.1rem', fontWeight: '700', marginBottom: '8px', color: '#2d3748', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   cardMeta: { display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#718096' },
