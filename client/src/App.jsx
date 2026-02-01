@@ -57,6 +57,7 @@ function App() {
                 <Route path="/post" element={<PostItem user={user} />} />
                 {/* 👈 2. ADD THIS DYNAMIC ROUTE FOR INDIVIDUAL ITEMS */}
                 <Route path="/item/:id" element={<ItemDetail user={user} />} />
+                <Route path="/profile" element={<Profile user={user} />} />
               </>
             )}
           </Routes>
