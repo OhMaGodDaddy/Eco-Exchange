@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -225,16 +226,21 @@ app.get('/api/messages/:friendId', async (req, res) => {
 // 🤖 NEW AI ROUTE: GENERATE DESCRIPTION
 // ============================================ 
 
-// ⚠️ PASTE YOUR API KEY HERE
-// Use the safe key from Render's Environment Variables
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 app.post('/api/generate-description', async (req, res) => {
     try {
         const { title, category } = req.body;
+
+        // 1. Verify Key Exists
+        if (!process.env.GEMINI_API_KEY) {
+            console.error("❌ ERROR: GEMINI_API_KEY is missing from environment variables.");
+            return res.status(500).json({ error: "API Key not configured on server" });
+        }
+
+        // 2. Initialize Google AI inside the route
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); 
         
-        // 1. Initialize Model
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });        
-        // 2. Create the Prompt
+        // 3. Create the Prompt
         const prompt = `Write a short, engaging, and professional sales description for a second-hand item being sold on an eco-friendly marketplace.
         
         Item Title: ${title}
@@ -242,16 +248,25 @@ app.post('/api/generate-description', async (req, res) => {
         
         The description should be 2-3 sentences long. Mention that it is a sustainable choice. Do not use hashtags.`;
 
-        // 3. Generate Content
+        console.log(`🤖 Generating description for: ${title}`);
+
+        // 4. Generate Content
         const result = await model.generateContent(prompt);
         const response = await result.response;
         const text = response.text();
 
-        // 4. Send back to Frontend
+        // 5. Send back to Frontend
         res.json({ description: text });
 
     } catch (error) {
-        console.error("AI Error:", error);
+        // This will print the EXACT error from Google in your Render logs
+        console.error("❌ AI ROUTE ERROR:", error.message);
+        
+        // Check for specific common errors
+        if (error.message.includes("403")) {
+            return res.status(500).json({ error: "AI Key blocked or invalid" });
+        }
+        
         res.status(500).json({ error: "Failed to generate description" });
     }
 });
