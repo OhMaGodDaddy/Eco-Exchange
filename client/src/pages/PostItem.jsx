@@ -2,7 +2,8 @@ import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-function PostItem() {
+// 1. ACCEPT THE USER PROP HERE 👇
+function PostItem({ user }) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '', 
@@ -35,24 +36,30 @@ function PostItem() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    // 🛡️ SECURITY CHECK: Make sure user is logged in
+    if (!user || !user._id) {
+        alert("You must be logged in to post!");
+        return;
+    }
+
     setLoading(true);
 
     const itemPayload = {
         ...formData,
-        title: formData.name, // Backend expects 'title'
-        price: 0,             // Ensure price is a number
-        hubLocation: 'Main Campus' // <--- ADDED: Required by your database!
+        title: formData.name, 
+        price: 0,            
+        hubLocation: 'Main Campus',
+        userId: user._id     // 👈 THIS IS THE FIX! We attach your ID tag.
     };
 
-    // 1. Updated URL to your Render link
-    // 2. Added { withCredentials: true } so it knows WHO is posting
     axios.post('https://eco-exchange-api.onrender.com/api/items', itemPayload, {
         withCredentials: true 
     })
       .then(res => {
         setLoading(false);
         alert('Gift posted successfully!');
-        navigate('/');
+        navigate('/profile'); // 👈 Redirect to Profile so you can see it immediately!
       })
       .catch(err => {
         setLoading(false);
@@ -96,7 +103,7 @@ function PostItem() {
           </select>
         </div>
 
-        {/* --- BEAUTIFUL UPLOAD SECTION --- */}
+        {/* --- UPLOAD SECTION --- */}
         <div style={styles.inputGroup}>
           <label style={styles.label}>Item Photo</label>
           

@@ -1,4 +1,3 @@
-// server/models/Item.js
 const mongoose = require('mongoose');
 
 const ItemSchema = new mongoose.Schema({
@@ -12,7 +11,7 @@ const ItemSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['Electronics', 'Clothing', 'Books', 'Furniture', 'Sports', 'Decor', 'Kitchen', 'Other']
+    enum: ['Electronics', 'Clothing', 'Books', 'Furniture', 'Plants', 'Sports', 'Decor', 'Kitchen', 'Other']
   },
   condition: {
     type: String,
@@ -27,9 +26,13 @@ const ItemSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  imageUrl: {
-    type: String, // We will store the link to the image here later
+  image: {        // 👈 Changed from imageUrl to image to match your frontend
+    type: String, 
     default: ''
+  },
+  userId: {       // 👈 NEW FIELD: This saves who posted the item!
+    type: String,
+    required: true
   },
   isAvailable: {
     type: Boolean,
