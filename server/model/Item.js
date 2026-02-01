@@ -1,47 +1,21 @@
 const mongoose = require('mongoose');
 
-const ItemSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true
-  },
-  description: {
-    type: String,
-  },
-  category: {
-    type: String,
-    required: true,
-    enum: ['Electronics', 'Clothing', 'Books', 'Furniture', 'Plants', 'Sports', 'Decor', 'Kitchen', 'Other']
-  },
-  condition: {
-    type: String,
-    required: true,
-    enum: ['New', 'Like New', 'Good', 'Fair', 'Poor']
-  },
-  price: {
-    type: Number,
-    default: 0
-  },
-  hubLocation: {
-    type: String,
-    required: true
-  },
-  image: {        // 👈 Changed from imageUrl to image to match your frontend
-    type: String, 
-    default: ''
-  },
-  userId: {       // 👈 NEW FIELD: This saves who posted the item!
-    type: String,
-    required: true
-  },
-  isAvailable: {
-    type: Boolean,
-    default: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+const itemSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    description: { type: String },
+    category: { type: String, required: true },
+    condition: { type: String, required: true },
+    hubLocation: { type: String, required: true },
+    price: { type: Number, default: 0 },
+    image: { type: String, default: '' },
+    status: { type: String, default: 'Available' },
+    
+    // 👇 THIS IS THE CRITICAL LINE THAT WAS MISSING!
+    userId: { type: String, required: true }, 
+    
+    // We keep these for backup/compatibility
+    userName: { type: String },
+    createdAt: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('Item', ItemSchema);
+module.exports = mongoose.model('Item', itemSchema);
