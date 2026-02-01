@@ -123,6 +123,41 @@ app.post('/api/items', async (req, res) => {
 });
 
 // 3. MESSAGING ROUTES (Inbox & Chat)
+
+// 👇 NEW: Check for unread messages (Red Dot Logic)
+app.get('/api/messages/unread', async (req, res) => {
+    if (!req.isAuthenticated()) return res.json({ count: 0 });
+    try {
+        const myId = req.user._id.toString();
+        // Count messages sent TO me that are NOT read
+        const count = await Message.countDocuments({ 
+            receiverId: myId, 
+            isRead: false 
+        });
+        res.json({ count });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 👇 NEW: Mark messages as read (When you open a chat)
+app.put('/api/messages/read/:senderId', async (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).send();
+    try {
+        const myId = req.user._id.toString();
+        const otherId = req.params.senderId;
+        
+        // Update all messages from this person to "Read"
+        await Message.updateMany(
+            { senderId: otherId, receiverId: myId, isRead: false },
+            { $set: { isRead: true } }
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/messages/conversations', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ error: 'Please log in' });
     const myId = req.user._id.toString();
@@ -161,7 +196,8 @@ app.post('/api/messages', async (req, res) => {
             senderId: req.user._id.toString(),
             senderName: req.user.displayName || "Anonymous",
             receiverId: receiverId.toString(),
-            text: text
+            text: text,
+            isRead: false // Explicitly set unread
         });
         await newMessage.save();
         res.status(201).json(newMessage);
