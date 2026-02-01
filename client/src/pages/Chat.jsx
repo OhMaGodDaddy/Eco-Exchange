@@ -1,24 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom'; // 👈 Added useNavigate
 import axios from 'axios';
+import { FaArrowLeft } from 'react-icons/fa'; // 👈 Added Icon
 
 function Chat({ user }) {
-  const { friendId } = useParams(); 
-  const navigate = useNavigate();
+  const { friendId } = useParams();
+  const navigate = useNavigate(); // 👈 Initialize navigation
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
-  const messagesEndRef = useRef(null); 
+  const messagesEndRef = useRef(null);
 
   // 1. Fetch Messages & Mark as Read
   const fetchMessages = async () => {
     try {
-      // A. Get the conversation
       const res = await axios.get(`https://eco-exchange-api.onrender.com/api/messages/${friendId}`, {
          withCredentials: true 
       });
       setMessages(res.data);
 
-      // B. 👇 NEW: Tell server we read these messages (Clears Red Dot)
+      // Mark as Read
       await axios.put(`https://eco-exchange-api.onrender.com/api/messages/read/${friendId}`, {}, {
          withCredentials: true 
       });
@@ -28,19 +28,16 @@ function Chat({ user }) {
     }
   };
 
-  // Poll for new messages every 3 seconds
   useEffect(() => {
     fetchMessages();
     const interval = setInterval(fetchMessages, 3000);
     return () => clearInterval(interval);
   }, [friendId]);
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 2. Send Message
   const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
@@ -52,7 +49,7 @@ function Chat({ user }) {
       }, { withCredentials: true });
       
       setNewMessage("");
-      fetchMessages(); // Refresh immediately
+      fetchMessages();
     } catch (err) {
       console.error("Failed to send:", err);
     }
@@ -60,14 +57,15 @@ function Chat({ user }) {
 
   return (
     <div style={styles.container}>
-      {/* Back Button */}
-      <button onClick={() => navigate(-1)} style={styles.backButton}>
-        ← Back to Inbox
+      
+      {/* 👇 NEW BACK BUTTON 👇 */}
+      <button onClick={() => navigate('/inbox')} style={styles.backButton}>
+        <FaArrowLeft /> Back to Inbox
       </button>
 
       <div style={styles.chatBox}>
         <div style={styles.header}>
-            <h3>Chat Conversation</h3>
+            <h3>Conversation</h3>
         </div>
 
         <div style={styles.messageList}>
@@ -108,11 +106,39 @@ function Chat({ user }) {
 }
 
 const styles = {
-  container: { maxWidth: '600px', margin: '20px auto', padding: '0 20px', height: '85vh', display: 'flex', flexDirection: 'column' },
-  backButton: { background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1rem', marginBottom: '10px', alignSelf: 'flex-start' },
+  container: { 
+    maxWidth: '600px', 
+    margin: '20px auto', 
+    padding: '0 20px', 
+    height: '85vh', 
+    display: 'flex', 
+    flexDirection: 'column' 
+  },
+  // 👇 STYLE FOR BACK BUTTON
+  backButton: {
+    background: 'none',
+    border: 'none',
+    color: '#1B4332',
+    cursor: 'pointer',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    marginBottom: '10px',
+    alignSelf: 'flex-start',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '5px 10px',
+    borderRadius: '8px',
+    transition: 'background 0.2s'
+  },
   chatBox: { 
-    flex: 1, display: 'flex', flexDirection: 'column', 
-    backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden'
+    flex: 1, 
+    display: 'flex', 
+    flexDirection: 'column', 
+    backgroundColor: 'white', 
+    borderRadius: '12px', 
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)', 
+    overflow: 'hidden'
   },
   header: { padding: '15px', backgroundColor: '#f8f9fa', borderBottom: '1px solid #ddd', textAlign: 'center' },
   messageList: { 
