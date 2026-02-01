@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const passport = require('passport'); 
 const session = require('express-session');
 const Message = require('./model/Message'); // 👈 Add this line!
+const MongoStore = require('connect-mongo');
 
 // 1. IMPORT MODELS (This is the Fix!)
 const User = require('./model/User'); 
@@ -35,6 +36,10 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'eco-exchange-secret-key',
     resave: false,
     saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: "mongodb+srv://KyleCarag:KyleCarag101@cluster0.qynunmn.mongodb.net/eco-exchange?retryWrites=true&w=majority&appName=Cluster0",
+        ttl: 24 * 60 * 60 // Session expires in 1 day
+    }),
     cookie: {
         secure: true, 
         sameSite: 'none', 
