@@ -228,7 +228,6 @@ app.get('/api/messages/:friendId', async (req, res) => {
 // ⚠️ PASTE YOUR API KEY HERE
 // Use the safe key from Render's Environment Variables
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 app.post('/api/generate-description', async (req, res) => {
     try {
         const { title, category } = req.body;
