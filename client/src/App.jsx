@@ -5,11 +5,10 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import NavBar from './components/NavBar'; 
 import PostItem from './pages/PostItem'; 
-import ItemDetail from './pages/ItemDetail'; // 👈 1. IMPORT THE NEW PAGE
+import ItemDetail from './pages/ItemDetail'; 
 import Profile from './pages/Profile';
-import Chat from './pages/Chat'; // 👈 Import this
-
-
+import Chat from './pages/Chat'; 
+import Inbox from './pages/Inbox'; // 👈 1. IMPORT THE INBOX PAGE
 
 function App() {
   const [user, setUser] = useState(null);
@@ -18,7 +17,8 @@ function App() {
   useEffect(() => {
     const fetchUser = async () => {
       try {
-        const response = await fetch("https://eco-exchange-api.onrender.com/api/current_user", {
+        // NOTE: Make sure this URL matches your backend URL exactly
+        const response = await fetch("https://eco-exchange-backend.onrender.com/api/current_user", {
             method: "GET",
             credentials: "include", 
             headers: { "Content-Type": "application/json" }
@@ -37,7 +37,8 @@ function App() {
   }, []);
 
   const handleLogout = () => {
-    window.location.href = "https://eco-exchange-api.onrender.com/api/logout";
+    // NOTE: Make sure this URL matches your backend URL exactly
+    window.location.href = "https://eco-exchange-backend.onrender.com/api/logout";
   };
 
   if (loading) return <div style={{color:'white', textAlign:'center', marginTop:'20%'}}>Checking Session...</div>;
@@ -55,10 +56,12 @@ function App() {
               <>
                 <Route path="/" element={<Home user={user} />} />
                 <Route path="/post" element={<PostItem user={user} />} />
-                {/* 👈 2. ADD THIS DYNAMIC ROUTE FOR INDIVIDUAL ITEMS */}
                 <Route path="/item/:id" element={<ItemDetail user={user} />} />
                 <Route path="/profile" element={<Profile user={user} />} />
-                <Route path="/chat/:friendId" element={<Chat user={user} />} /> {/* 👈 Add this */}
+                
+                {/* 👈 2. ADD MESSAGING ROUTES */}
+                <Route path="/inbox" element={<Inbox user={user} />} />
+                <Route path="/chat/:friendId" element={<Chat user={user} />} />
               </>
             )}
           </Routes>

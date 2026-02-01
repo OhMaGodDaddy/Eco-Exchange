@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FaLeaf, FaPlus, FaShieldAlt } from 'react-icons/fa'; // Added FaShieldAlt for admin icon
+import { FaLeaf, FaPlus, FaShieldAlt, FaEnvelope } from 'react-icons/fa'; // 👈 Added FaEnvelope
 
 // Receives 'user' and 'onLogout' from App.jsx
 function NavBar({ user, onLogout }) {
@@ -22,6 +22,11 @@ function NavBar({ user, onLogout }) {
                 <FaShieldAlt style={{ marginRight: '5px' }}/> Admin
             </Link>
         )}
+
+        {/* 👇 NEW MESSAGES LINK 👇 */}
+        <Link to="/inbox" style={styles.messageLink} title="My Messages">
+            <FaEnvelope size={20} />
+        </Link>
 
         {/* Sell Button */}
         <Link to="/post" style={styles.sellBtn}>
@@ -81,11 +86,10 @@ const styles = {
     alignItems: 'center',
     gap: '15px'
   },
-  // --- NEW STYLE FOR ADMIN LINK ---
   adminLink: {
     display: 'flex',
     alignItems: 'center',
-    color: '#d32f2f', // Red color to stand out
+    color: '#d32f2f', 
     textDecoration: 'none',
     fontWeight: 'bold',
     fontSize: '0.9rem',
@@ -93,6 +97,16 @@ const styles = {
     padding: '6px 12px',
     borderRadius: '8px',
     backgroundColor: '#fff0f0'
+  },
+  // 👇 STYLE FOR MESSAGE ICON
+  messageLink: {
+    color: '#1B4332',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '8px',
+    borderRadius: '50%',
+    transition: 'background 0.2s',
+    textDecoration: 'none'
   },
   sellBtn: {
     backgroundColor: '#1B4332',
@@ -112,13 +126,13 @@ const styles = {
     gap: '10px'
   },
   avatar: {
-    width: '40px',          // Slightly larger for better visibility
-    height: '40px',         // Must match width for a perfect circle
-    borderRadius: '50%',    // Makes it a circle
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
     cursor: 'pointer',
     border: '2px solid #1B4332',
-    objectFit: 'cover',     // 👈 CRITICAL: Prevents squishing/stretching
-    display: 'block'        // Ensures proper spacing
+    objectFit: 'cover',
+    display: 'block'
   },
   logoutBtn: {
     background: 'none',
