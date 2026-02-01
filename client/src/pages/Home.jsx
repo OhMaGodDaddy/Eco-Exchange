@@ -105,9 +105,9 @@ function Home({ user }) {
                     onChange={(e) => setSelectedCategory(e.target.value)}
                     style={styles.select}
                 >
-                    <option value="">All Categories</option>
+                    <option value="" style={{ color: 'black' }}>All Categories</option>
                     {CATEGORIES.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                        <option key={cat} value={cat} style={{ color: 'black' }}>{cat}</option>
                     ))}
                 </select>
                 <div style={styles.dropdownArrow}>▼</div>
@@ -121,9 +121,9 @@ function Home({ user }) {
                     onChange={(e) => setSelectedHub(e.target.value)}
                     style={styles.select}
                 >
-                    <option value="">All Locations</option>
+                    <option value="" style={{ color: 'black' }}>All Locations</option>
                     {LOCATIONS.map(loc => (
-                        <option key={loc} value={loc}>{loc}</option>
+                        <option key={loc} value={loc} style={{ color: 'black' }}>{loc}</option>
                     ))}
                 </select>
                 <div style={styles.dropdownArrow}>▼</div>
@@ -177,7 +177,6 @@ function Home({ user }) {
                           style={styles.cardImage}
                           onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }} 
                         />
-                        {/* 🚫 REMOVED FREE TAG HERE */}
                       </div>
                       
                       <div style={styles.cardContent}>
@@ -219,7 +218,6 @@ const styles = {
     color: 'white', 
     padding: '60px 20px 80px', 
     textAlign: 'center',
-    // Removed border radius to make it look like a clean header block
     boxShadow: '0 4px 10px rgba(0,0,0,0.1)' 
   },
   heroTitle: { fontSize: '3rem', margin: '0 0 10px', fontWeight: '800' },
@@ -255,10 +253,9 @@ const styles = {
     padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '0.85rem'
   },
 
-  // 👇 UPDATED: Removed negative margin so the text isn't covered
   listingsSection: { 
     maxWidth: '1200px', 
-    margin: '30px auto', // Positive margin pushes it down below the hero
+    margin: '30px auto', 
     padding: '0 20px' 
   },
   sectionTitle: { fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '25px', color: '#2D3748' },
