@@ -12,9 +12,38 @@ function PostItem({ user }) {
     condition: 'Good'
   });
   const [loading, setLoading] = useState(false);
+  
+  // 🤖 AI LOADING STATE
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // 🤖 AI GENERATE FUNCTION
+  const handleGenerateAI = async (e) => {
+    e.preventDefault(); // Stop form submit
+
+    if (!formData.name) {
+        alert("Please enter an Item Name first so the AI knows what to write about!");
+        return;
+    }
+
+    setIsGenerating(true);
+    try {
+        const res = await axios.post('https://eco-exchange-api.onrender.com/api/generate-description', {
+            title: formData.name,
+            category: formData.category
+        });
+
+        // Update the description with AI result
+        setFormData(prev => ({ ...prev, description: res.data.description }));
+    } catch (err) {
+        console.error("AI Error:", err);
+        alert("Could not generate description. Please try again.");
+    } finally {
+        setIsGenerating(false);
+    }
   };
 
   const handleImageUpload = (e) => {
@@ -52,7 +81,6 @@ function PostItem({ user }) {
         userId: user._id    
     };
 
-    // ✅ UPDATED URL to use the correct API address
     axios.post('https://eco-exchange-api.onrender.com/api/items', itemPayload, {
         withCredentials: true 
     })
@@ -75,7 +103,7 @@ function PostItem({ user }) {
 
   return (
     <div style={styles.container}>
-      {/* 🔙 NEW GO BACK BUTTON */}
+      {/* 🔙 GO BACK BUTTON */}
       <button 
         onClick={() => navigate(-1)} 
         style={styles.backButton}
@@ -94,8 +122,27 @@ function PostItem({ user }) {
         </div>
 
         <div style={styles.inputGroup}>
-          <label style={styles.label}>Description</label>
-          <textarea name="description" placeholder="Condition, pickup instructions, etc." value={formData.description} onChange={handleChange} style={styles.textarea} required />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={styles.label}>Description</label>
+                {/* 🤖 AI BUTTON */}
+                <button 
+                    onClick={handleGenerateAI} 
+                    disabled={isGenerating}
+                    style={styles.aiButton}
+                    type="button" // Important: prevents form submit
+                >
+                    {isGenerating ? '✨ Writing...' : '✨ Write with AI'}
+                </button>
+            </div>
+            
+            <textarea 
+                name="description" 
+                placeholder="Condition, pickup instructions, etc." 
+                value={formData.description} 
+                onChange={handleChange} 
+                style={styles.textarea} 
+                required 
+            />
         </div>
 
         <div style={styles.inputGroup}>
@@ -145,7 +192,6 @@ function PostItem({ user }) {
 
 const styles = {
   container: { maxWidth: '600px', margin: '40px auto', padding: '20px', fontFamily: 'sans-serif' },
-  // 👇 Added style for Back Button
   backButton: { background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1.2rem', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '5px' },
   title: { textAlign: 'center', color: '#1B4332', fontSize: '2rem', marginBottom: '10px' },
   subtitle: { textAlign: 'center', color: '#666', marginBottom: '30px' },
@@ -155,6 +201,20 @@ const styles = {
   input: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem' },
   textarea: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem', height: '100px', resize: 'vertical' },
   select: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem', backgroundColor: 'white' },
+  
+  // 🤖 New AI Button Style
+  aiButton: {
+      backgroundColor: '#e6fffa',
+      color: '#2c7a7b',
+      border: '1px solid #b2f5ea',
+      borderRadius: '20px',
+      padding: '5px 12px',
+      fontSize: '0.8rem',
+      fontWeight: 'bold',
+      cursor: 'pointer',
+      transition: '0.2s'
+  },
+
   uploadBox: {
     border: '2px dashed #1B4332',
     borderRadius: '8px',
