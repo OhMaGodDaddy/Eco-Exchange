@@ -238,8 +238,7 @@ app.post('/api/generate-description', async (req, res) => {
 
         // 2. Initialize Google AI inside the route
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); 
-        
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });        
         // 3. Create the Prompt
         const prompt = `Write a short, engaging, and professional sales description for a second-hand item being sold on an eco-friendly marketplace.
         
