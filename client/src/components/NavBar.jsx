@@ -1,8 +1,32 @@
 import { Link } from 'react-router-dom';
-import { FaLeaf, FaPlus, FaShieldAlt, FaEnvelope } from 'react-icons/fa'; // 👈 Added FaEnvelope
+import { useState, useEffect } from 'react'; // 👈 Added Hooks
+import { FaLeaf, FaPlus, FaShieldAlt, FaEnvelope } from 'react-icons/fa';
 
 // Receives 'user' and 'onLogout' from App.jsx
 function NavBar({ user, onLogout }) {
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // 1. 🔴 Poll for unread messages every 3 seconds
+  useEffect(() => {
+    const checkUnread = async () => {
+      if (!user) return; // Don't fetch if not logged in
+      try {
+        const res = await fetch("https://eco-exchange-api.onrender.com/api/messages/unread", { 
+            credentials: 'include' 
+        });
+        const data = await res.json();
+        setUnreadCount(data.count);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+      }
+    };
+    
+    checkUnread(); // Run immediately
+    const interval = setInterval(checkUnread, 3000); // Repeat every 3s
+    
+    return () => clearInterval(interval); // Cleanup
+  }, [user]);
+
   return (
     <nav style={styles.nav}>
       {/* Logo */}
@@ -23,9 +47,18 @@ function NavBar({ user, onLogout }) {
             </Link>
         )}
 
-        {/* 👇 NEW MESSAGES LINK 👇 */}
+        {/* 👇 MESSAGES LINK WITH RED DOT 👇 */}
         <Link to="/inbox" style={styles.messageLink} title="My Messages">
-            <FaEnvelope size={20} />
+            <div style={{ position: 'relative', display: 'flex' }}>
+                <FaEnvelope size={20} />
+                
+                {/* 🔴 THE RED DOT BADGE */}
+                {unreadCount > 0 && (
+                    <span style={styles.notificationBadge}>
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                )}
+            </div>
         </Link>
 
         {/* Sell Button */}
@@ -34,16 +67,18 @@ function NavBar({ user, onLogout }) {
         </Link>
 
         {/* User Profile Section */}
-        <div style={styles.profileSection}>
-            <Link to="/profile" style={{ display: 'flex', alignItems: 'center' }}>
-            <img 
-                src={user.picture || user.photos?.[0]?.value || 'https://ui-avatars.com/api/?name=' + user.name} 
-                alt="User Profile" 
-                style={styles.avatar} 
-                />
-            </Link>
-            <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
-        </div>
+        {user && (
+            <div style={styles.profileSection}>
+                <Link to="/profile" style={{ display: 'flex', alignItems: 'center' }}>
+                <img 
+                    src={user.picture || user.photos?.[0]?.value || 'https://ui-avatars.com/api/?name=' + user.name} 
+                    alt="User Profile" 
+                    style={styles.avatar} 
+                    />
+                </Link>
+                <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
+            </div>
+        )}
       </div>
     </nav>
   );
@@ -98,7 +133,6 @@ const styles = {
     borderRadius: '8px',
     backgroundColor: '#fff0f0'
   },
-  // 👇 STYLE FOR MESSAGE ICON
   messageLink: {
     color: '#1B4332',
     display: 'flex',
@@ -107,6 +141,23 @@ const styles = {
     borderRadius: '50%',
     transition: 'background 0.2s',
     textDecoration: 'none'
+  },
+  // 👇 NEW STYLE FOR THE BADGE
+  notificationBadge: {
+    position: 'absolute',
+    top: '-8px',
+    right: '-8px',
+    backgroundColor: '#e74c3c',
+    color: 'white',
+    fontSize: '10px',
+    fontWeight: 'bold',
+    borderRadius: '50%',
+    minWidth: '16px',
+    height: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '2px solid white'
   },
   sellBtn: {
     backgroundColor: '#1B4332',

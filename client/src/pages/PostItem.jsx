@@ -2,7 +2,6 @@ import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-// 1. ACCEPT THE USER PROP HERE 👇
 function PostItem({ user }) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -37,7 +36,7 @@ function PostItem({ user }) {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // 🛡️ SECURITY CHECK: Make sure user is logged in
+    // 🛡️ SECURITY CHECK
     if (!user || !user._id) {
         alert("You must be logged in to post!");
         return;
@@ -50,16 +49,17 @@ function PostItem({ user }) {
         title: formData.name, 
         price: 0,            
         hubLocation: 'Main Campus',
-        userId: user._id     // 👈 THIS IS THE FIX! We attach your ID tag.
+        userId: user._id    
     };
 
+    // ✅ UPDATED URL to use the correct API address
     axios.post('https://eco-exchange-api.onrender.com/api/items', itemPayload, {
         withCredentials: true 
     })
       .then(res => {
         setLoading(false);
-        alert('Gift posted successfully!');
-        navigate('/profile'); // 👈 Redirect to Profile so you can see it immediately!
+        alert('Item posted successfully!');
+        navigate('/profile'); 
       })
       .catch(err => {
         setLoading(false);
@@ -75,6 +75,14 @@ function PostItem({ user }) {
 
   return (
     <div style={styles.container}>
+      {/* 🔙 NEW GO BACK BUTTON */}
+      <button 
+        onClick={() => navigate(-1)} 
+        style={styles.backButton}
+      >
+        ← Back
+      </button>
+
       <h2 style={styles.title}>Give an Item Away</h2>
       <p style={styles.subtitle}>Upload a photo from your device.</p>
       
@@ -137,6 +145,8 @@ function PostItem({ user }) {
 
 const styles = {
   container: { maxWidth: '600px', margin: '40px auto', padding: '20px', fontFamily: 'sans-serif' },
+  // 👇 Added style for Back Button
+  backButton: { background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '1.2rem', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '5px' },
   title: { textAlign: 'center', color: '#1B4332', fontSize: '2rem', marginBottom: '10px' },
   subtitle: { textAlign: 'center', color: '#666', marginBottom: '30px' },
   form: { display: 'flex', flexDirection: 'column', gap: '20px', backgroundColor: 'white', padding: '30px', borderRadius: '10px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' },
