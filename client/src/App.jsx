@@ -9,7 +9,6 @@ import ItemDetail from './pages/ItemDetail'; // 👈 1. IMPORT THE NEW PAGE
 import Profile from './pages/Profile';
 import Chat from './pages/Chat'; // 👈 Import this
 
-const Message = require('./model/Message');
 
 
 function App() {

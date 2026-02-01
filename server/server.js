@@ -3,6 +3,7 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const passport = require('passport'); 
 const session = require('express-session');
+const Message = require('./model/Message'); // 👈 Add this line!
 
 // 1. IMPORT MODELS (This is the Fix!)
 const User = require('./model/User'); 
