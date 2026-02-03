@@ -78,7 +78,7 @@ function Home({ user }) {
       
       {/* --- HERO SECTION --- */}
       <div style={styles.hero}>
-        <h1 style={styles.heroTitle}>Marketplace</h1>
+        <h1 style={styles.heroTitle}>Exchange Hub</h1>
         <p style={styles.heroSubtitle}>Discover sustainable treasures in your community.</p>
 
         {/* Search Bar */}
