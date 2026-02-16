@@ -80,11 +80,10 @@ function ItemDetail({ user }) {
             <p style={styles.metaText}><strong>Condition:</strong> {item.condition || 'New'}</p>
             <p style={styles.metaText}><strong>Hub:</strong> {item.hubLocation}</p>
           </div>
-          
+
           {/* 🗺️ NEW MAP COMPONENT */}
           {/* For now, we are hardcoding coordinates just to test if the map renders! */}
-          <LocationMap lat={14.5995} lng={120.9842} itemName={item.title} />
-
+          <LocationMap lat={item.lat} lng={item.lng} itemName={item.title} />
           <div style={styles.divider}></div>
 
           <div>
