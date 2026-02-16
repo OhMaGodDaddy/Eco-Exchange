@@ -15,7 +15,15 @@ const itemSchema = new mongoose.Schema({
     
     // We keep these for backup/compatibility
     userName: { type: String },
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
+
+
+
+    embedding: {
+        type: [Number], // This tells Mongo to expect an array of numbers
+        required: false
+
+    }
 });
 
 module.exports = mongoose.model('Item', itemSchema);

@@ -6,7 +6,11 @@ const passport = require('passport');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 
-// 👇 UPDATED: Import for the new SDK
+// FOR TENSORFLOW.JS 
+const tf = require('@tensorflow/tfjs'); 
+const use = require('@tensorflow-models/universal-sentence-encoder');
+
+// IMPORT GOOGLE AI LIBRARY
 const { GoogleGenAI } = require("@google/genai");
 
 // IMPORT MODELS
@@ -58,9 +62,32 @@ mongoose.connect("mongodb+srv://KyleCarag:KyleCarag101@cluster0.qynunmn.mongodb.
     .then(() => console.log("✅ MongoDB Connected Successfully"))
     .catch((err) => console.log("❌ MongoDB Connection Error:", err));
 
-// --- API ROUTES (Auth, Items, Messages) ---
-// (Note: I've kept your existing logic exactly as is)
 
+// ============================================
+// 🧠 TENSORFLOW SETUP & HELPER
+// ============================================
+let aiModel = null;
+
+use.load().then(model => {
+    aiModel = model;
+    console.log("🧠 TensorFlow Universal Sentence Encoder (Pure JS) Loaded!");
+}).catch(err => console.error("❌ Failed to load AI:", err));
+
+// Calculate how similar two items are (Returns a score from -1 to 1)
+function calculateCosineSimilarity(vecA, vecB) {
+    let dotProduct = 0, normA = 0, normB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+        dotProduct += vecA[i] * vecB[i];
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
+    }
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+// ============================================
+
+
+// --- API ROUTES (Auth) ---
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 app.get('/auth/google/callback', 
@@ -81,6 +108,7 @@ app.get('/api/logout', (req, res, next) => {
     });
 });
 
+// --- API ROUTES (Items) ---
 app.get('/api/items', async (req, res) => {
     try {
         const { hub, category } = req.query;
@@ -104,15 +132,27 @@ app.get('/api/items/:id', async (req, res) => {
     }
 });
 
+// 👇 UPDATED: TensorFlow Math added to Item Creation
 app.post('/api/items', async (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
     try {
+        let itemEmbedding = [];
+        
+        // Convert the title and category into math using TF model
+        if (aiModel) {
+            const textToAnalyze = `${req.body.title} ${req.body.category}`;
+            const embeddings = await aiModel.embed([textToAnalyze]);
+            itemEmbedding = embeddings.arraySync()[0]; 
+        }
+
         const newItem = new Item({
             ...req.body,
             googleId: req.user.googleId,
             userName: req.user.displayName,
-            userEmail: req.user.email
+            userEmail: req.user.email,
+            embedding: itemEmbedding // Save the array of numbers
         });
+        
         await newItem.save();
         res.status(201).json(newItem);
     } catch (err) {
@@ -120,8 +160,39 @@ app.post('/api/items', async (req, res) => {
     }
 });
 
-// --- MESSAGING ROUTES ---
+// 👇 NEW: Recommendation Engine Route
+app.get('/api/items/:id/recommendations', async (req, res) => {
+    try {
+        const targetItem = await Item.findById(req.params.id);
+        if (!targetItem || !targetItem.embedding || targetItem.embedding.length === 0) {
+            return res.status(404).json({ message: "No AI data found for this item." });
+        }
 
+        // Find all other available items that have TF embeddings
+        const allItems = await Item.find({ 
+            _id: { $ne: targetItem._id }, 
+            status: 'Available',
+            embedding: { $exists: true, $not: { $size: 0 } }
+        });
+
+        // Calculate cosine similarity score for each item
+        const scoredItems = allItems.map(item => {
+            const score = calculateCosineSimilarity(targetItem.embedding, item.embedding);
+            return { item, score };
+        });
+
+        // Sort by highest score and return top 4
+        scoredItems.sort((a, b) => b.score - a.score);
+        const topRecommendations = scoredItems.slice(0, 4).map(data => data.item);
+
+        res.json(topRecommendations);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// --- MESSAGING ROUTES ---
 app.get('/api/messages/unread', async (req, res) => {
     if (!req.isAuthenticated()) return res.json({ count: 0 });
     try {
@@ -202,10 +273,10 @@ app.get('/api/messages/:friendId', async (req, res) => {
     }
 });
 
-// ============================================
-// 🤖 UPDATED AI ROUTE: USING NEW GOOGLE GENAI
-// ============================================ 
 
+// ============================================
+// 🤖 GOOGLE GENAI ROUTE: DESCRIPTION GENERATOR
+// ============================================ 
 app.post('/api/generate-description', async (req, res) => {
     try {
         const { title, category } = req.body;
@@ -215,12 +286,9 @@ app.post('/api/generate-description', async (req, res) => {
             return res.status(500).json({ error: "API Key missing" });
         }
 
-        // Initialize the NEW GenAI client
         const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
         console.log(`🤖 AI is generating content for: ${title}`);
 
-        // Using the 2.0-flash model for better reliability
         const result = await client.models.generateContent({
             model: 'gemini-1.5-flash-002', 
             contents: [{
@@ -234,9 +302,7 @@ app.post('/api/generate-description', async (req, res) => {
             }]
         });
 
-        // The text is now available directly on the result object
         const descriptionText = result.text || "No description generated.";
-
         res.json({ description: descriptionText });
 
     } catch (error) {
@@ -244,7 +310,6 @@ app.post('/api/generate-description', async (req, res) => {
         res.status(500).json({ error: "Failed to generate description" });
     }
 });
-
 // ============================================
 
 app.listen(PORT, () => {
