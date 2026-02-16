@@ -4,11 +4,15 @@ import axios from 'axios';
 
 function ItemDetail({ user }) {
   const { id } = useParams(); 
-  const navigate = useNavigate(); // Hook to redirect after deleting
+  const navigate = useNavigate();
   const [item, setItem] = useState(null);
   const [error, setError] = useState(null);
+  
+  // 🤖 NEW: State to hold our AI recommendations
+  const [recommendations, setRecommendations] = useState([]);
 
   useEffect(() => {
+    // 1. Fetch the main item
     axios.get(`https://eco-exchange-api.onrender.com/api/items/${id}`)
       .then(res => {
         setItem(res.data);
@@ -17,19 +21,28 @@ function ItemDetail({ user }) {
         console.error("Fetch error:", err);
         setError("Could not find this treasure.");
       });
+
+    // 2. 🤖 NEW: Fetch AI Recommendations for this specific item
+    axios.get(`https://eco-exchange-api.onrender.com/api/items/${id}/recommendations`)
+      .then(res => {
+        setRecommendations(res.data);
+      })
+      .catch(err => {
+        console.error("Recommendations error:", err);
+        // We don't set an error state here because if recs fail, 
+        // we still want the user to be able to see the main item!
+      });
   }, [id]);
 
-  // 🗑️ Handle Delete Logic
   const handleDelete = async () => {
     if (!window.confirm("Are you sure you want to delete this listing?")) return;
 
     try {
-      // We must send 'withCredentials: true' so the server knows who we are!
       await axios.delete(`https://eco-exchange-api.onrender.com/api/items/${id}`, {
         withCredentials: true 
       });
       alert("Item deleted successfully!");
-      navigate('/profile'); // Send user back to profile
+      navigate('/profile'); 
     } catch (err) {
       console.error("Delete failed:", err);
       alert("Failed to delete item. You might not be authorized.");
@@ -39,7 +52,6 @@ function ItemDetail({ user }) {
   if (error) return <div style={{padding: '50px', textAlign: 'center', color: 'white'}}>{error}</div>;
   if (!item) return <div style={{padding: '50px', textAlign: 'center', color: 'white'}}>Loading treasure...</div>;
 
-  // 🔐 Check if the logged-in user matches the item's creator
   const isOwner = user && item.userId === user._id;
 
   return (
@@ -81,7 +93,6 @@ function ItemDetail({ user }) {
               🗑 Delete This Listing
             </button>
           ) : (
-            // 👇 THIS BUTTON NOW GOES TO CHAT
             <button 
               onClick={() => navigate(`/chat/${item.userId}`)} 
               style={styles.contactBtn}
@@ -89,9 +100,35 @@ function ItemDetail({ user }) {
               💬 Chat with Owner
             </button>
           )}
-          
         </div>
       </div>
+
+      {/* 🤖 NEW: RECOMMENDATIONS SECTION */}
+      {recommendations.length > 0 && (
+        <div style={styles.recommendationsContainer}>
+          <h2 style={styles.recsTitle}>✨ Similar Items You Might Like</h2>
+          <div style={styles.recsGrid}>
+            {recommendations.map(rec => (
+              <div 
+                key={rec._id} 
+                style={styles.recCard} 
+                // When clicked, navigate to this new item!
+                onClick={() => navigate(`/item/${rec._id}`)}
+              >
+                <img 
+                  src={rec.image || "https://via.placeholder.com/150"} 
+                  alt={rec.title || rec.name} 
+                  style={styles.recImage} 
+                />
+                <div style={styles.recCardInfo}>
+                  <h4 style={styles.recCardTitle}>{rec.title || rec.name}</h4>
+                  <p style={styles.recCardCategory}>{rec.category}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -107,7 +144,8 @@ const styles = {
     padding: '50px', 
     borderRadius: '24px', 
     boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
-    alignItems: 'start' // Changed to start so text aligns better if descriptions are long
+    alignItems: 'start',
+    marginBottom: '40px' // Added some breathing room below the main card
   },
   imageSection: { 
     borderRadius: '16px', 
@@ -133,7 +171,6 @@ const styles = {
   meta: { display: 'flex', flexDirection: 'column', gap: '8px' },
   metaText: { color: '#4A5568', fontSize: '1rem', margin: 0 },
   divider: { height: '1px', backgroundColor: '#E2E8F0', width: '100%' },
-  
   contactBtn: { 
     backgroundColor: '#1B4332', 
     color: 'white', 
@@ -147,9 +184,8 @@ const styles = {
     transition: '0.2s',
     width: '100%'
   },
-  // New style for Delete Button
   deleteBtn: {
-    backgroundColor: '#e53e3e', // Red color
+    backgroundColor: '#e53e3e',
     color: 'white', 
     border: 'none', 
     padding: '18px', 
@@ -160,6 +196,53 @@ const styles = {
     marginTop: '10px',
     transition: '0.2s',
     width: '100%'
+  },
+  
+  // 🤖 NEW: Styles for the Recommendations Section
+  recommendationsContainer: {
+    marginTop: '20px',
+    padding: '20px 0',
+  },
+  recsTitle: {
+    color: '#1B4332',
+    fontSize: '1.5rem',
+    marginBottom: '20px',
+    fontWeight: 'bold',
+  },
+  recsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+    gap: '20px',
+  },
+  recCard: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    overflow: 'hidden',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+    cursor: 'pointer',
+    transition: 'transform 0.2s',
+    border: '1px solid #eee'
+  },
+  recImage: {
+    width: '100%',
+    height: '150px',
+    objectFit: 'cover',
+  },
+  recCardInfo: {
+    padding: '15px',
+  },
+  recCardTitle: {
+    margin: '0 0 5px 0',
+    color: '#1A202C',
+    fontSize: '1rem',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  },
+  recCardCategory: {
+    margin: 0,
+    color: '#718096',
+    fontSize: '0.85rem'
   }
 };
 
