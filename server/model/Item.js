@@ -17,13 +17,14 @@ const itemSchema = new mongoose.Schema({
     userName: { type: String },
     createdAt: { type: Date, default: Date.now },
 
-
-
     embedding: {
         type: [Number], // This tells Mongo to expect an array of numbers
         required: false
+    },
 
-    }
+    // 🗺️ NEW: ADD MAP COORDINATES HERE
+    lat: { type: Number, required: false },
+    lng: { type: Number, required: false }
 });
 
 module.exports = mongoose.model('Item', itemSchema);

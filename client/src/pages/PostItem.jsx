@@ -9,7 +9,10 @@ function PostItem({ user }) {
     description: '',
     category: 'Furniture',
     image: '', 
-    condition: 'Good'
+    condition: 'Good',
+    // 🗺️ NEW: Added lat and lng to the state
+    lat: null,
+    lng: null
   });
   const [loading, setLoading] = useState(false);
   
@@ -44,6 +47,29 @@ function PostItem({ user }) {
     } finally {
         setIsGenerating(false);
     }
+  };
+
+  // 🗺️ NEW: GET USER GPS LOCATION FUNCTION
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Your browser doesn't support geolocation.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setFormData(prev => ({
+          ...prev,
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        }));
+        alert("📍 Location captured successfully!");
+      },
+      (error) => {
+        console.error("GPS Error:", error);
+        alert("Could not get location. Please check your browser permissions to allow location access.");
+      }
+    );
   };
 
   const handleImageUpload = (e) => {
@@ -158,6 +184,30 @@ function PostItem({ user }) {
           </select>
         </div>
 
+        {/* 🗺️ NEW: LOCATION BUTTON */}
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>Item Location</label>
+          <button 
+            type="button" 
+            onClick={handleGetLocation}
+            style={{ 
+              padding: '12px', 
+              backgroundColor: formData.lat ? '#d1e7dd' : '#f8f9fa', 
+              color: formData.lat ? '#0f5132' : '#333',
+              border: '1px solid #ccc', 
+              borderRadius: '6px', 
+              cursor: 'pointer', 
+              fontWeight: 'bold',
+              transition: '0.2s'
+            }}
+          >
+            {formData.lat ? '✅ Location Attached!' : '📍 Tag My Current Location'}
+          </button>
+          <small style={{color: '#666', fontSize: '0.8rem'}}>
+            This helps others know how far away the item is.
+          </small>
+        </div>
+
         {/* --- UPLOAD SECTION --- */}
         <div style={styles.inputGroup}>
           <label style={styles.label}>Item Photo</label>
@@ -202,7 +252,7 @@ const styles = {
   textarea: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem', height: '100px', resize: 'vertical' },
   select: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem', backgroundColor: 'white' },
   
-  // 🤖 New AI Button Style
+  // 🤖 AI Button Style
   aiButton: {
       backgroundColor: '#e6fffa',
       color: '#2c7a7b',
