@@ -49,7 +49,7 @@ function PostItem({ user }) {
     }
   };
 
-  // 🗺️ NEW: GET USER GPS LOCATION FUNCTION
+  // 🗺️ UPDATED: HIGH-ACCURACY GPS LOCATION FUNCTION
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       alert("Your browser doesn't support geolocation.");
@@ -68,6 +68,12 @@ function PostItem({ user }) {
       (error) => {
         console.error("GPS Error:", error);
         alert("Could not get location. Please check your browser permissions to allow location access.");
+      },
+      // 👇 THIS IS THE NEW HIGH ACCURACY BLOCK 👇
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
       }
     );
   };
@@ -155,7 +161,7 @@ function PostItem({ user }) {
                     onClick={handleGenerateAI} 
                     disabled={isGenerating}
                     style={styles.aiButton}
-                    type="button" // Important: prevents form submit
+                    type="button" 
                 >
                     {isGenerating ? '✨ Writing...' : '✨ Write with AI'}
                 </button>
@@ -184,7 +190,7 @@ function PostItem({ user }) {
           </select>
         </div>
 
-        {/* 🗺️ NEW: LOCATION BUTTON */}
+        {/* 🗺️ LOCATION BUTTON */}
         <div style={styles.inputGroup}>
           <label style={styles.label}>Item Location</label>
           <button 
