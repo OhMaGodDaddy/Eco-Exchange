@@ -7,10 +7,15 @@ const itemSchema = new mongoose.Schema({
     condition: { type: String, required: true },
     hubLocation: { type: String, required: true },
     price: { type: Number, default: 0 },
-    image: { type: String, default: '' },
+    
+    // 📸 The original single image (acts as the main thumbnail so old code doesn't break)
+    image: { type: String, default: '' }, 
+    
+    // 📸 NEW: An array of strings to hold ALL images for the gallery
+    images: { type: [String], default: [] }, 
+
     status: { type: String, default: 'Available' },
     userEmail: { type: String },
-    // 👇 THIS IS THE CRITICAL LINE THAT WAS MISSING!
     userId: { type: String, required: true }, 
     
     // We keep these for backup/compatibility
@@ -18,11 +23,10 @@ const itemSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
 
     embedding: {
-        type: [Number], // This tells Mongo to expect an array of numbers
+        type: [Number],
         required: false
     },
 
-    // 🗺️ NEW: ADD MAP COORDINATES HERE
     lat: { type: Number, required: false },
     lng: { type: Number, required: false }
 });

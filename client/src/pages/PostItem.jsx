@@ -8,25 +8,20 @@ function PostItem({ user }) {
     name: '', 
     description: '',
     category: 'Furniture',
-    image: '', 
+    images: [], // 📸 NEW: Now an array to hold multiple images
     condition: 'Good',
-    // 🗺️ NEW: Added lat and lng to the state
     lat: null,
     lng: null
   });
   const [loading, setLoading] = useState(false);
-  
-  // 🤖 AI LOADING STATE
   const [isGenerating, setIsGenerating] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // 🤖 AI GENERATE FUNCTION
   const handleGenerateAI = async (e) => {
-    e.preventDefault(); // Stop form submit
-
+    e.preventDefault(); 
     if (!formData.name) {
         alert("Please enter an Item Name first so the AI knows what to write about!");
         return;
@@ -38,8 +33,6 @@ function PostItem({ user }) {
             title: formData.name,
             category: formData.category
         });
-
-        // Update the description with AI result
         setFormData(prev => ({ ...prev, description: res.data.description }));
     } catch (err) {
         console.error("AI Error:", err);
@@ -49,7 +42,6 @@ function PostItem({ user }) {
     }
   };
 
-  // 🗺️ UPDATED: HIGH-ACCURACY GPS LOCATION FUNCTION
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       alert("Your browser doesn't support geolocation.");
@@ -67,37 +59,53 @@ function PostItem({ user }) {
       },
       (error) => {
         console.error("GPS Error:", error);
-        alert("Could not get location. Please check your browser permissions to allow location access.");
+        alert("Could not get location. Please check your browser permissions.");
       },
-      // 👇 THIS IS THE NEW HIGH ACCURACY BLOCK 👇
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-      }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  // 📸 NEW: Handle multiple file uploads
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
 
-    if (file.size > 4 * 1024 * 1024) {
-        alert("File is too big! Please choose an image under 4MB.");
+    if (formData.images.length + files.length > 3) {
+        alert("You can only upload up to 3 images total to save space!");
         return;
     }
 
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onloadend = () => {
-      setFormData({ ...formData, image: reader.result });
-    };
+    const newImages = [];
+    
+    for (const file of files) {
+        if (file.size > 4 * 1024 * 1024) {
+            alert(`File ${file.name} is too big! Skipping.`);
+            continue;
+        }
+
+        // Convert each file to Base64
+        const base64 = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onloadend = () => resolve(reader.result);
+        });
+        newImages.push(base64);
+    }
+
+    setFormData(prev => ({ ...prev, images: [...prev.images, ...newImages] }));
+  };
+
+  // 📸 NEW: Remove an image before posting
+  const removeImage = (indexToRemove) => {
+      setFormData(prev => ({
+          ...prev,
+          images: prev.images.filter((_, index) => index !== indexToRemove)
+      }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    // 🛡️ SECURITY CHECK
     if (!user || !user._id) {
         alert("You must be logged in to post!");
         return;
@@ -110,7 +118,9 @@ function PostItem({ user }) {
         title: formData.name, 
         price: 0,            
         hubLocation: 'Main Campus',
-        userId: user._id    
+        userId: user._id,
+        // 📸 Fallback: Send the first image as the main 'image' so old code doesn't break
+        image: formData.images.length > 0 ? formData.images[0] : ''
     };
 
     axios.post('https://eco-exchange-api.onrender.com/api/items', itemPayload, {
@@ -124,7 +134,6 @@ function PostItem({ user }) {
       .catch(err => {
         setLoading(false);
         console.error("FULL ERROR DETAILS:", err);
-        
         if (err.response && err.response.data) {
             alert(`Server Error: ${JSON.stringify(err.response.data)}`);
         } else {
@@ -135,16 +144,12 @@ function PostItem({ user }) {
 
   return (
     <div style={styles.container}>
-      {/* 🔙 GO BACK BUTTON */}
-      <button 
-        onClick={() => navigate(-1)} 
-        style={styles.backButton}
-      >
+      <button onClick={() => navigate(-1)} style={styles.backButton}>
         ← Back
       </button>
 
       <h2 style={styles.title}>Give an Item Away</h2>
-      <p style={styles.subtitle}>Upload a photo from your device.</p>
+      <p style={styles.subtitle}>Upload up to 3 photos of your item.</p>
       
       <form onSubmit={handleSubmit} style={styles.form}>
         
@@ -156,25 +161,12 @@ function PostItem({ user }) {
         <div style={styles.inputGroup}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <label style={styles.label}>Description</label>
-                {/* 🤖 AI BUTTON */}
-                <button 
-                    onClick={handleGenerateAI} 
-                    disabled={isGenerating}
-                    style={styles.aiButton}
-                    type="button" 
-                >
+                <button onClick={handleGenerateAI} disabled={isGenerating} style={styles.aiButton} type="button" >
                     {isGenerating ? '✨ Writing...' : '✨ Write with AI'}
                 </button>
             </div>
             
-            <textarea 
-                name="description" 
-                placeholder="Condition, pickup instructions, etc." 
-                value={formData.description} 
-                onChange={handleChange} 
-                style={styles.textarea} 
-                required 
-            />
+            <textarea name="description" placeholder="Condition, pickup instructions, etc." value={formData.description} onChange={handleChange} style={styles.textarea} required />
         </div>
 
         <div style={styles.inputGroup}>
@@ -190,52 +182,38 @@ function PostItem({ user }) {
           </select>
         </div>
 
-        {/* 🗺️ LOCATION BUTTON */}
         <div style={styles.inputGroup}>
           <label style={styles.label}>Item Location</label>
-          <button 
-            type="button" 
-            onClick={handleGetLocation}
-            style={{ 
-              padding: '12px', 
-              backgroundColor: formData.lat ? '#d1e7dd' : '#f8f9fa', 
-              color: formData.lat ? '#0f5132' : '#333',
-              border: '1px solid #ccc', 
-              borderRadius: '6px', 
-              cursor: 'pointer', 
-              fontWeight: 'bold',
-              transition: '0.2s'
-            }}
-          >
+          <button type="button" onClick={handleGetLocation} style={{ padding: '12px', backgroundColor: formData.lat ? '#d1e7dd' : '#f8f9fa', color: formData.lat ? '#0f5132' : '#333', border: '1px solid #ccc', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', transition: '0.2s' }}>
             {formData.lat ? '✅ Location Attached!' : '📍 Tag My Current Location'}
           </button>
-          <small style={{color: '#666', fontSize: '0.8rem'}}>
-            This helps others know how far away the item is.
-          </small>
         </div>
 
-        {/* --- UPLOAD SECTION --- */}
+        {/* 📸 MULTIPLE UPLOAD SECTION */}
         <div style={styles.inputGroup}>
-          <label style={styles.label}>Item Photo</label>
+          <label style={styles.label}>Item Photos ({formData.images.length}/3)</label>
           
           <label htmlFor="file-upload" style={styles.uploadBox}>
-            {formData.image ? (
-              <img src={formData.image} alt="Preview" style={styles.previewImage} />
-            ) : (
-              <div style={styles.uploadPlaceholder}>
+            <div style={styles.uploadPlaceholder}>
                 <span style={{fontSize: '2rem'}}>📷</span>
-                <span>Click to Upload Photo</span>
-              </div>
-            )}
+                <span>Click to Upload Photos</span>
+            </div>
           </label>
 
-          <input 
-            id="file-upload"
-            type="file" 
-            accept="image/*" 
-            onChange={handleImageUpload} 
-            style={{ display: 'none' }} 
-          />
+          {/* Added 'multiple' attribute to input */}
+          <input id="file-upload" type="file" accept="image/*" multiple onChange={handleImageUpload} style={{ display: 'none' }} disabled={formData.images.length >= 3} />
+
+          {/* Display a grid of selected images */}
+          {formData.images.length > 0 && (
+              <div style={styles.imageGrid}>
+                  {formData.images.map((imgSrc, index) => (
+                      <div key={index} style={styles.imagePreviewContainer}>
+                          <img src={imgSrc} alt={`Preview ${index}`} style={styles.previewImage} />
+                          <button type="button" onClick={() => removeImage(index)} style={styles.removeBtn}>✕</button>
+                      </div>
+                  ))}
+              </div>
+          )}
         </div>
 
         <button type="submit" style={styles.button} disabled={loading}>
@@ -258,47 +236,18 @@ const styles = {
   textarea: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem', height: '100px', resize: 'vertical' },
   select: { padding: '12px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '1rem', backgroundColor: 'white' },
   
-  // 🤖 AI Button Style
-  aiButton: {
-      backgroundColor: '#e6fffa',
-      color: '#2c7a7b',
-      border: '1px solid #b2f5ea',
-      borderRadius: '20px',
-      padding: '5px 12px',
-      fontSize: '0.8rem',
-      fontWeight: 'bold',
-      cursor: 'pointer',
-      transition: '0.2s'
-  },
+  aiButton: { backgroundColor: '#e6fffa', color: '#2c7a7b', border: '1px solid #b2f5ea', borderRadius: '20px', padding: '5px 12px', fontSize: '0.8rem', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' },
 
-  uploadBox: {
-    border: '2px dashed #1B4332',
-    borderRadius: '8px',
-    padding: '20px',
-    textAlign: 'center',
-    cursor: 'pointer',
-    backgroundColor: '#f8fdfa',
-    transition: '0.3s',
-    minHeight: '150px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  uploadPlaceholder: {
-    display: 'flex', 
-    flexDirection: 'column', 
-    alignItems: 'center', 
-    gap: '10px', 
-    color: '#1B4332',
-    fontWeight: 'bold'
-  },
-  previewImage: { 
-    maxWidth: '100%', 
-    maxHeight: '200px', 
-    objectFit: 'contain', 
-    borderRadius: '4px' 
-  },
-  button: { padding: '15px', backgroundColor: '#1B4332', color: 'white', border: 'none', borderRadius: '6px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px', opacity: 1 }
+  uploadBox: { border: '2px dashed #1B4332', borderRadius: '8px', padding: '15px', textAlign: 'center', cursor: 'pointer', backgroundColor: '#f8fdfa', transition: '0.3s' },
+  uploadPlaceholder: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', color: '#1B4332', fontWeight: 'bold' },
+  
+  // 📸 NEW STYLES FOR IMAGE GRID
+  imageGrid: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' },
+  imagePreviewContainer: { position: 'relative', width: '100px', height: '100px' },
+  previewImage: { width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px', border: '1px solid #ddd' },
+  removeBtn: { position: 'absolute', top: '-5px', right: '-5px', backgroundColor: '#e74c3c', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  
+  button: { padding: '15px', backgroundColor: '#1B4332', color: 'white', border: 'none', borderRadius: '6px', fontSize: '1.1rem', cursor: 'pointer', fontWeight: 'bold', marginTop: '10px' }
 };
 
 export default PostItem;
