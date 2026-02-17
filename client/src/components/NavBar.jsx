@@ -32,72 +32,74 @@ function NavBar({ user, onLogout }) {
   }, [user]);
 
   return (
-    <nav style={styles.nav}>
-      {/* Logo */}
-      <Link to="/" className="tour-search-bar" style={styles.logo}>
-        <div style={styles.iconContainer}>
-            <FaLeaf size={20} color="#fff" />
+    <>
+      <nav style={styles.nav}>
+        {/* Logo */}
+        <Link to="/" className="tour-search-bar" style={styles.logo}>
+          <div style={styles.iconContainer}>
+              <FaLeaf size={20} color="#fff" />
+          </div>
+          <span style={styles.logoText}>EcoExchange</span>
+        </Link>
+
+        {/* Right Side Actions */}
+        <div style={styles.actions}>
+          
+          {/* --- ADMIN DASHBOARD LINK (Only for Admins) --- */}
+          {user && user.role === 'admin' && (
+              <Link to="/admin" style={styles.adminLink}>
+                  <FaShieldAlt style={{ marginRight: '5px' }}/> Admin
+              </Link>
+          )}
+
+          {/* ❓ HELP ICON TO REPLAY TUTORIAL */}
+          <button 
+            onClick={() => setRunTour(true)}
+            className="tour-help-button" 
+            style={styles.helpBtn}
+            title="Replay Tutorial"
+          >
+            <FaQuestionCircle size={20} />
+          </button>
+
+          {/* MESSAGES LINK WITH RED DOT */}
+          <Link to="/inbox" style={styles.messageLink} title="My Messages">
+              <div style={{ position: 'relative', display: 'flex' }}>
+                  <FaEnvelope size={20} />
+                  
+                  {/* 🔴 THE RED DOT BADGE */}
+                  {unreadCount > 0 && (
+                      <span style={styles.notificationBadge}>
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                      </span>
+                  )}
+              </div>
+          </Link>
+
+          {/* Sell Button */}
+          <Link to="/post" className="tour-sell-button" style={styles.sellBtn}>
+              <FaPlus style={{marginRight: '5px'}}/> Sell
+          </Link>
+
+          {/* User Profile Section */}
+          {user && (
+              <div className="tour-profile" style={styles.profileSection}>
+                  <Link to="/profile" style={{ display: 'flex', alignItems: 'center' }}>
+                  <img 
+                      src={user.picture || user.photos?.[0]?.value || 'https://ui-avatars.com/api/?name=' + user.name} 
+                      alt="User Profile" 
+                      style={styles.avatar} 
+                      />
+                  </Link>
+                  <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
+              </div>
+          )}
         </div>
-        <span style={styles.logoText}>EcoExchange</span>
-      </Link>
+      </nav>
 
-      {/* Right Side Actions */}
-      <div style={styles.actions}>
-        
-        {/* --- ADMIN DASHBOARD LINK (Only for Admins) --- */}
-        {user && user.role === 'admin' && (
-            <Link to="/admin" style={styles.adminLink}>
-                <FaShieldAlt style={{ marginRight: '5px' }}/> Admin
-            </Link>
-        )}
-
-        {/* ❓ HELP ICON TO REPLAY TUTORIAL - Added 'tour-help-button' target */}
-        <button 
-          onClick={() => setRunTour(true)}
-          className="tour-help-button" 
-          style={styles.helpBtn}
-          title="Replay Tutorial"
-        >
-          <FaQuestionCircle size={20} />
-        </button>
-
-        {/* MESSAGES LINK WITH RED DOT */}
-        <Link to="/inbox" style={styles.messageLink} title="My Messages">
-            <div style={{ position: 'relative', display: 'flex' }}>
-                <FaEnvelope size={20} />
-                
-                {/* 🔴 THE RED DOT BADGE */}
-                {unreadCount > 0 && (
-                    <span style={styles.notificationBadge}>
-                        {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                )}
-            </div>
-        </Link>
-
-        {/* Sell Button - Updated to 'tour-sell-button' target */}
-        <Link to="/post" className="tour-sell-button" style={styles.sellBtn}>
-            <FaPlus style={{marginRight: '5px'}}/> Sell
-        </Link>
-
-        {/* User Profile Section */}
-        {user && (
-            <div className="tour-profile" style={styles.profileSection}>
-                <Link to="/profile" style={{ display: 'flex', alignItems: 'center' }}>
-                <img 
-                    src={user.picture || user.photos?.[0]?.value || 'https://ui-avatars.com/api/?name=' + user.name} 
-                    alt="User Profile" 
-                    style={styles.avatar} 
-                    />
-                </Link>
-                <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
-            </div>
-        )}
-      </div>
-
-      {/* 🗺️ THE TOUR COMPONENT */}
+      {/* 🗺️ THE TOUR COMPONENT MOVED OUTSIDE THE NAV BAR */}
       <OnboardingTour runTour={runTour} setRunTour={setRunTour} />
-    </nav>
+    </>
   );
 }
 
