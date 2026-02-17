@@ -83,7 +83,8 @@ function Home({ user }) {
 
         {/* Search Bar */}
         <div style={styles.searchContainer}>
-            <div style={styles.searchWrapper}>
+            {/* 🎯 HERE IS THE STICKY NOTE: className="tour-search-bar" added below! */}
+            <div className="tour-search-bar" style={styles.searchWrapper}>
                 <FaSearch style={styles.searchIcon} />
                 <input 
                     type="text" 
