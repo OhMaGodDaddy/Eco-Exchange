@@ -1,16 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { FaLeaf, FaPlus, FaShieldAlt, FaEnvelope, FaQuestionCircle } from 'react-icons/fa'; // 👈 Added FaQuestionCircle
-import OnboardingTour from './OnBoardingTour'; // 👈 Added Tour Import
+import { FaLeaf, FaPlus, FaShieldAlt, FaEnvelope, FaQuestionCircle } from 'react-icons/fa';
+import OnboardingTour from './OnBoardingTour'; 
 
 // Receives 'user' and 'onLogout' from App.jsx
 function NavBar({ user, onLogout }) {
   const [unreadCount, setUnreadCount] = useState(0);
   
-  // 💡 NEW: State to control the tour manually
+  // 💡 State to control the tour manually
   const [runTour, setRunTour] = useState(false);
 
-  // 1. 🔴 Poll for unread messages every 3 seconds
+  // 🔴 Poll for unread messages every 3 seconds
   useEffect(() => {
     const checkUnread = async () => {
       if (!user) return; // Don't fetch if not logged in
@@ -33,7 +33,7 @@ function NavBar({ user, onLogout }) {
 
   return (
     <nav style={styles.nav}>
-      {/* Logo - 🎯 We added the 'tour-search-bar' class here for now! */}
+      {/* Logo */}
       <Link to="/" className="tour-search-bar" style={styles.logo}>
         <div style={styles.iconContainer}>
             <FaLeaf size={20} color="#fff" />
@@ -51,16 +51,17 @@ function NavBar({ user, onLogout }) {
             </Link>
         )}
 
-        {/* ❓ NEW: HELP ICON TO REPLAY TUTORIAL */}
+        {/* ❓ HELP ICON TO REPLAY TUTORIAL - Added 'tour-help-button' target */}
         <button 
           onClick={() => setRunTour(true)}
+          className="tour-help-button" 
           style={styles.helpBtn}
           title="Replay Tutorial"
         >
           <FaQuestionCircle size={20} />
         </button>
 
-        {/* 👇 MESSAGES LINK WITH RED DOT 👇 */}
+        {/* MESSAGES LINK WITH RED DOT */}
         <Link to="/inbox" style={styles.messageLink} title="My Messages">
             <div style={{ position: 'relative', display: 'flex' }}>
                 <FaEnvelope size={20} />
@@ -74,12 +75,12 @@ function NavBar({ user, onLogout }) {
             </div>
         </Link>
 
-        {/* Sell Button - 🎯 Added 'tour-post-item' class */}
-        <Link to="/post" className="tour-post-item" style={styles.sellBtn}>
+        {/* Sell Button - Updated to 'tour-sell-button' target */}
+        <Link to="/post" className="tour-sell-button" style={styles.sellBtn}>
             <FaPlus style={{marginRight: '5px'}}/> Sell
         </Link>
 
-        {/* User Profile Section - 🎯 Added 'tour-profile' class */}
+        {/* User Profile Section */}
         {user && (
             <div className="tour-profile" style={styles.profileSection}>
                 <Link to="/profile" style={{ display: 'flex', alignItems: 'center' }}>
@@ -149,7 +150,6 @@ const styles = {
     borderRadius: '8px',
     backgroundColor: '#fff0f0'
   },
-  // ❓ NEW STYLE FOR THE HELP BUTTON
   helpBtn: {
     background: 'none',
     border: 'none',
