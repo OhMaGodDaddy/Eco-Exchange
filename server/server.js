@@ -228,16 +228,14 @@ app.put('/api/messages/read/:senderId', async (req, res) => {
 });
 
 app.get('/api/messages/conversations', async (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ error: 'Please log in' });
-  }
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Please log in' });
 
   const myId = req.user._id.toString();
 
   try {
     const allMessages = await Message.find({
       $or: [{ senderId: myId }, { receiverId: myId }],
-    }).sort({ timestamp: -1 }); // ✅ sort by timestamp instead of _id
+    }).sort({ timestamp: -1 });
 
     const conversationMap = new Map();
 
@@ -252,8 +250,8 @@ app.get('/api/messages/conversations', async (req, res) => {
             username: msg.senderId !== myId ? msg.senderName : "Chat User",
           },
           lastMessage: msg.text,
-          timestamp: msg.timestamp,          // ✅ use timestamp field
-          itemId: msg.itemId || null,        // ✅ ADD THIS
+          timestamp: msg.timestamp,
+          itemId: msg.itemId || null, // ✅ THIS MUST APPEAR IN THE RESPONSE
           link: `/chat/${otherUserId}`,
         });
       }
