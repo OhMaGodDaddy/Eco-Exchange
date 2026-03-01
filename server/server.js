@@ -23,6 +23,27 @@ require("./config/passport");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// MongoDB URI handling: prefer explicit env var; fall back to local DB in dev
+const DEFAULT_LOCAL_MONGO = "mongodb://127.0.0.1:27017/eco-exchange";
+const MONGO_URI = process.env.MONGO_URI || (process.env.NODE_ENV === "production" ? null : DEFAULT_LOCAL_MONGO);
+
+function isValidMongoUri(uri) {
+  return typeof uri === "string" && /^mongodb(\+srv)?:\/\//.test(uri);
+}
+
+if (!isValidMongoUri(MONGO_URI)) {
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      '❌ Invalid or missing MONGO_URI. Set `MONGO_URI` to a valid MongoDB connection string starting with "mongodb://" or "mongodb+srv://".'
+    );
+    process.exit(1);
+  } else {
+    console.warn(
+      `⚠️ MONGO_URI missing or invalid. Falling back to local MongoDB: ${DEFAULT_LOCAL_MONGO}`
+    );
+  }
+}
+
 /**
  * ✅ Conversation key includes BOTH users + itemId
  * - If itemId is missing, treat it as "general"
@@ -63,11 +84,12 @@ app.use(
     secret: process.env.SESSION_SECRET || "eco-exchange-secret-key",
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({
-      // ✅ move to .env in production
-      mongoUrl: process.env.MONGO_URI || "mongodb+srv://<user>:<pass>@<cluster>/<db>",
-      ttl: 24 * 60 * 60,
-    }),
+    store: MONGO_URI
+      ? MongoStore.create({
+          mongoUrl: MONGO_URI,
+          ttl: 24 * 60 * 60,
+        })
+      : undefined,
     cookie: {
       secure: true,
       sameSite: "none",
@@ -81,10 +103,14 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // --- DATABASE ---
-mongoose
-  .connect(process.env.MONGO_URI || "mongodb+srv://<user>:<pass>@<cluster>/<db>")
-  .then(() => console.log("✅ MongoDB Connected Successfully"))
-  .catch((err) => console.log("❌ MongoDB Connection Error:", err));
+if (MONGO_URI) {
+  mongoose
+    .connect(MONGO_URI)
+    .then(() => console.log("✅ MongoDB Connected Successfully"))
+    .catch((err) => console.log("❌ MongoDB Connection Error:", err));
+} else {
+  console.warn("❌ Skipping MongoDB connection: MONGO_URI not set (production requires a valid MONGO_URI).");
+}
 
 // ============================================
 // 🧠 TENSORFLOW SETUP & HELPER
