@@ -83,6 +83,10 @@ export default function Messages({ user }) {
     );
   }, [conversations, activeConversationId]);
 
+  // Fallback for the right-hand "Item Details" pane — some conversations
+  // may include a linked item object. Use a safe optional lookup.
+  const activeItem = activeConversation?.item || null;
+
   // Filter conversations (client-side)
   const filteredConversations = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -186,12 +190,11 @@ export default function Messages({ user }) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50">
-      <div className="mx-auto max-w-[1400px] px-4 py-6">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr_320px]">
-          {/* LEFT: conversation list */}
-          <aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
-            <div className="border-b border-zinc-100 p-4">
+    <div className="h-[calc(100vh-80px)] bg-zinc-50 overflow-hidden">
+        <div className="mx-auto max-w-[1400px] px-4 py-6 h-full overflow-hidden">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr_320px] h-full overflow-hidden">          
+            {/* LEFT: conversation list */}
+            <aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col h-full">            <div className="border-b border-zinc-100 p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-zinc-900">Messages</h3>
                 <button
@@ -253,8 +256,7 @@ export default function Messages({ user }) {
             </div>
 
             {/* Conversation list */}
-            <div className="max-h-[calc(100vh-180px)] overflow-y-auto">
-              {filteredConversations.length === 0 ? (
+            <div className="flex-1 overflow-y-auto">                  {filteredConversations.length === 0 ? (
                 <div className="p-6 text-center text-sm text-zinc-500">
                   No conversations yet.
                   <div className="mt-3">
@@ -320,8 +322,7 @@ export default function Messages({ user }) {
           </aside>
 
           {/* CENTER: active chat */}
-          <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
-            {/* Chat header */}
+        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col h-full">            {/* Chat header */}
             <div className="flex h-16 items-center justify-between border-b border-zinc-100 px-5">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 overflow-hidden rounded-full bg-zinc-200 ring-2 ring-emerald-500/20">
@@ -474,47 +475,55 @@ export default function Messages({ user }) {
           </section>
 
           {/* RIGHT: details pane (placeholder until your backend links item data to conversations) */}
-          <aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
-            <div className="border-b border-zinc-100 p-4">
-              <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                Item Details
-              </div>
+            {/* RIGHT: details pane */}
+<aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col h-full">
+  {/* Scrollable content INSIDE the aside */}
+  <div className="flex-1 overflow-y-auto">
+    <div className="border-b border-zinc-100 p-4">
+      <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+        Item Details
+      </div>
 
-              <div className="mt-4 overflow-hidden rounded-2xl ring-1 ring-zinc-200">
-                <div className="relative h-40 w-full bg-zinc-200">
-                  <img
-                    alt="Item"
-                    className="h-full w-full object-cover"
-                    src={
-                      activeConversation?.item?.image ||
-                      "https://placehold.co/900x600?text=Item+Preview"
-                    }
-                    onError={(e) => {
-                      e.currentTarget.src =
-                        "https://placehold.co/900x600?text=No+Image";
-                    }}
-                  />
-                  <div className="absolute right-2 top-2 rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-900">
-                    EXCHANGE
-                  </div>
-                </div>
+      <div className="mt-4 overflow-hidden rounded-2xl ring-1 ring-zinc-200">
+        <div className="relative h-40 w-full bg-zinc-200">
+          <img
+            alt="Item"
+            className="h-full w-full object-cover"
+            src={
+              activeItem?.images?.[0] ||
+              activeItem?.image ||
+              "https://placehold.co/900x600?text=Item+Preview"
+            }
+            onError={(e) => {
+              e.currentTarget.src = "https://placehold.co/900x600?text=No+Image";
+            }}
+          />
+          <div className="absolute right-2 top-2 rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-900">
+            EXCHANGE
+          </div>
+        </div>
 
-                <div className="p-3">
-                  <div className="font-bold text-zinc-900">
-                    {activeConversation?.item?.title || "Item title"}
-                  </div>
-                  <div className="mt-1 line-clamp-2 text-xs text-zinc-500">
-                    {activeConversation?.item?.description ||
-                      "Item details will appear here once linked to a listing."}
-                  </div>
+        <div className="p-3">
+          <div className="font-bold text-zinc-900">
+            {activeItem?.title || "Item title"}
+          </div>
 
-                  <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-700">
-                    <FaMapMarkerAlt className="text-emerald-600" />
-                    {activeConversation?.item?.hubLocation || "Location"}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="mt-1 line-clamp-2 text-xs text-zinc-500">
+            {activeItem?.description ||
+              "Item details will appear here once linked to a listing."}
+          </div>
+
+          <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-700">
+            <FaMapMarkerAlt className="text-emerald-600" />
+            {activeItem?.hubLocation || "Location"}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* You can keep your Exchange Status + Safety blocks here too */}
+    {/* ... */}
+  </div>
 
             {/* Status (UI only for now) */}
             <div className="border-b border-zinc-100 p-4">

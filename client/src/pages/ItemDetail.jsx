@@ -139,12 +139,31 @@ function ItemDetail({ user }) {
               🗑 Delete This Listing
             </button>
           ) : (
-            <button 
-              onClick={() => navigate(`/chat/${item.userId}`)} 
-              style={styles.contactBtn}
-            >
-              💬 Chat with Owner
-            </button>
+            <button
+  onClick={async () => {
+    try {
+      // ✅ Send a starter message tied to the item
+      await axios.post(
+        "https://eco-exchange-api.onrender.com/api/messages",
+        {
+          receiverId: item.userId,
+          itemId: item._id,
+          text: `Hi! I'm interested in "${item.title || item.name}". Is it still available?`,
+        },
+        { withCredentials: true }
+      );
+
+      // ✅ Go to inbox/messages UI (use your actual route)
+      navigate("/inbox"); // or "/messages" if that’s your page
+    } catch (err) {
+      console.error(err);
+      alert("Please login to message the owner.");
+    }
+  }}
+  style={styles.contactBtn}
+>
+  💬 Chat with Owner
+</button>
           )}
         </div>
       </div>

@@ -228,44 +228,64 @@ app.put('/api/messages/read/:senderId', async (req, res) => {
 });
 
 app.get('/api/messages/conversations', async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ error: 'Please log in' });
-    const myId = req.user._id.toString();
-    try {
-        const allMessages = await Message.find({ $or: [{ senderId: myId }, { receiverId: myId }] }).sort({ _id: -1 });
-        const conversationMap = new Map();
-        allMessages.forEach(msg => {
-            const otherUserId = msg.senderId === myId ? msg.receiverId : msg.senderId;
-            if (!conversationMap.has(otherUserId)) {
-                conversationMap.set(otherUserId, {
-                    conversationId: otherUserId,
-                    otherUser: { _id: otherUserId, username: msg.senderId !== myId ? msg.senderName : "Chat User" },
-                    lastMessage: msg.text,
-                    timestamp: msg._id.getTimestamp(),
-                    link: `/chat/${otherUserId}` 
-                });
-            }
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: 'Please log in' });
+  }
+
+  const myId = req.user._id.toString();
+
+  try {
+    const allMessages = await Message.find({
+      $or: [{ senderId: myId }, { receiverId: myId }],
+    }).sort({ timestamp: -1 }); // ✅ sort by timestamp instead of _id
+
+    const conversationMap = new Map();
+
+    allMessages.forEach((msg) => {
+      const otherUserId = msg.senderId === myId ? msg.receiverId : msg.senderId;
+
+      if (!conversationMap.has(otherUserId)) {
+        conversationMap.set(otherUserId, {
+          conversationId: otherUserId,
+          otherUser: {
+            _id: otherUserId,
+            username: msg.senderId !== myId ? msg.senderName : "Chat User",
+          },
+          lastMessage: msg.text,
+          timestamp: msg.timestamp,          // ✅ use timestamp field
+          itemId: msg.itemId || null,        // ✅ ADD THIS
+          link: `/chat/${otherUserId}`,
         });
-        res.json(Array.from(conversationMap.values()));
-    } catch (error) {
-        res.status(500).json({ error: 'Server error' });
-    }
+      }
+    });
+
+    res.json(Array.from(conversationMap.values()));
+  } catch (error) {
+    console.error("Conversations error:", error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 app.post('/api/messages', async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
-    try {
-        const newMessage = new Message({
-            senderId: req.user._id,
-            senderName: req.user.displayName || "Anonymous",
-            receiverId: req.body.receiverId,
-            text: req.body.text,
-            isRead: false 
-        });
-        await newMessage.save();
-        res.status(201).json(newMessage);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Login required" });
+  }
+
+  try {
+    const newMessage = new Message({
+      senderId: req.user._id.toString(),              // keep consistent (String in schema)
+      senderName: req.user.displayName || "Anonymous",
+      receiverId: req.body.receiverId,
+      itemId: req.body.itemId || null,                // ✅ NEW (links chat to item)
+      text: req.body.text,
+      isRead: false
+    });
+
+    await newMessage.save();
+    res.status(201).json(newMessage);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.get('/api/messages/:friendId', async (req, res) => {
