@@ -1,84 +1,126 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Link } from 'react-router-dom';
-import { FaSearch, FaMapMarkerAlt, FaTag, FaTrash } from 'react-icons/fa';
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { Link } from "react-router-dom";
+import {
+  FaSearch,
+  FaMapMarkerAlt,
+  FaTrash,
+  FaHeart,
+  FaRegHeart,
+} from "react-icons/fa";
 
-// 1. HARDCODED LISTS
-const LOCATIONS = [
-  "Manila", "Quezon City", "Makati", "Taguig", "Cebu", "Davao", "Pasig", "Other"
-];
+// API
+const API_BASE = "https://eco-exchange-api.onrender.com";
 
+// Sidebar categories (match your screenshot style)
 const CATEGORIES = [
-  "Electronics", "Furniture", "Clothing", "Books", "Appliances", "Toys", "Tools", "Other"
+  { key: "", label: "All Items" },
+  { key: "Furniture", label: "Furniture" },
+  { key: "Clothing", label: "Clothing" },
+  { key: "Electronics", label: "Electronics" },
+  { key: "Books", label: "Books" },
+  { key: "Garden", label: "Garden" },
+  { key: "Appliances", label: "Appliances" },
+  { key: "Toys", label: "Toys" },
+  { key: "Tools", label: "Tools" },
+  { key: "Other", label: "Other" },
 ];
 
-function Home({ user }) {
+const LOCATIONS = ["", "Manila", "Quezon City", "Makati", "Taguig", "Cebu", "Davao", "Pasig", "Other"];
+
+function cn(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function getDisplayImage(item) {
+  if (item?.images?.length) return item.images[0];
+  if (item?.image) return item.image;
+  return "https://placehold.co/900x700?text=No+Image";
+}
+
+function safeText(s) {
+  return (s ?? "").toString();
+}
+
+export default function Home({ user }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
-  
-  // Search, Filter & Pagination State
+
+  // Filters / search
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedHub, setSelectedHub] = useState("");
-  
-  // 👇 NEW: Pagination State
+
+  // Sort
+  const [sortBy, setSortBy] = useState("newest"); // newest | oldest | az | za
+
+  // Pagination
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  // 2. FETCH ITEMS (Now accepts a page number)
+  // Local favorites UI only (optional)
+  const [favorites, setFavorites] = useState(() => new Set());
+
+  const toggleFav = (e, itemId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFavorites((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
   const fetchItems = async (pageNum = 1) => {
     setLoading(true);
     try {
-      // 👇 NEW: Pass the page number to the backend
       const params = { page: pageNum };
       if (selectedCategory) params.category = selectedCategory;
       if (selectedHub) params.hub = selectedHub;
-      
-      const res = await axios.get("https://eco-exchange-api.onrender.com/api/items", {
-        params: params,
-        withCredentials: true
+
+      const res = await axios.get(`${API_BASE}/api/items`, {
+        params,
+        withCredentials: true,
       });
-      
-      const fetchedItems = res.data;
 
-      // 👇 NEW: Replace if page 1, append if page 2+
-      if (pageNum === 1) {
-        setItems(fetchedItems);
-      } else {
-        setItems(prevItems => [...prevItems, ...fetchedItems]);
-      }
+      const fetched = res.data || [];
 
-      // If the backend returned fewer than 20 items, we hit the end!
-      if (fetchedItems.length < 20) {
-        setHasMore(false);
-      } else {
-        setHasMore(true);
-      }
+      if (pageNum === 1) setItems(fetched);
+      else setItems((prev) => [...prev, ...fetched]);
 
+      // if backend page size is 20 like your code expects:
+      setHasMore(fetched.length >= 20);
     } catch (err) {
       console.error("Error fetching items:", err);
+      // keep current items, just stop load more
+      if (pageNum === 1) setItems([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
   };
 
-  // 👇 NEW: When filters change, reset to Page 1
+  // When sidebar filters change: reset to page 1
   useEffect(() => {
     setPage(1);
     fetchItems(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, selectedHub]);
 
-  // 3. DELETE HANDLER
   const handleDelete = async (e, itemId) => {
     e.preventDefault();
+    e.stopPropagation();
+
     if (!window.confirm("Are you sure you want to remove this item?")) return;
 
     try {
-      const response = await axios.delete(`https://eco-exchange-api.onrender.com/api/items/${itemId}`, {
-        withCredentials: true 
+      const response = await axios.delete(`${API_BASE}/api/items/${itemId}`, {
+        withCredentials: true,
       });
+
       if (response.status === 200) {
-        setItems(items.filter(item => item._id !== itemId));
+        setItems((prev) => prev.filter((it) => it._id !== itemId));
         alert("Item removed successfully.");
       }
     } catch (err) {
@@ -87,251 +129,358 @@ function Home({ user }) {
     }
   };
 
-  // Client-side Text Search
-  const filteredItems = items.filter(item => {
-    const title = item.title || item.name || "";
-    const desc = item.description || "";
-    return title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           desc.toLowerCase().includes(searchTerm.toLowerCase());
-  });
+  // Client-side search + sort (keeps it functional even if backend doesn't support search/sort)
+  const filteredItems = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+
+    const searched = items.filter((item) => {
+      const title = safeText(item.title || item.name).toLowerCase();
+      const desc = safeText(item.description).toLowerCase();
+      const hub = safeText(item.hubLocation).toLowerCase();
+      const cat = safeText(item.category).toLowerCase();
+      if (!q) return true;
+      return (
+        title.includes(q) ||
+        desc.includes(q) ||
+        hub.includes(q) ||
+        cat.includes(q)
+      );
+    });
+
+    const sorted = [...searched].sort((a, b) => {
+      const aTitle = safeText(a.title || a.name).toLowerCase();
+      const bTitle = safeText(b.title || b.name).toLowerCase();
+
+      // createdAt might exist in your DB; if not, fallback keeps stable
+      const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+
+      switch (sortBy) {
+        case "oldest":
+          return aDate - bDate;
+        case "az":
+          return aTitle.localeCompare(bTitle);
+        case "za":
+          return bTitle.localeCompare(aTitle);
+        case "newest":
+        default:
+          return bDate - aDate;
+      }
+    });
+
+    return sorted;
+  }, [items, searchTerm, sortBy]);
+
+  const activeCategoryLabel =
+    CATEGORIES.find((c) => c.key === selectedCategory)?.label || "All Items";
 
   return (
-    <div style={styles.container}>
-      
-      {/* --- HERO SECTION --- */}
-      <div style={styles.hero}>
-        <h1 style={styles.heroTitle}>Exchange Hub</h1>
-        <p style={styles.heroSubtitle}>Discover sustainable treasures in your community.</p>
+    <div className="min-h-screen bg-zinc-50">
+      {/* Layout wrapper */}
+      <div className="mx-auto max-w-[1400px] px-4 py-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
+          {/* Sidebar */}
+          <aside className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 lg:sticky lg:top-6 lg:h-[calc(100vh-48px)]">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/20 grid place-items-center">
+                <span className="text-emerald-600 font-bold">E</span>
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-zinc-900">Categories</div>
+                <div className="text-xs text-zinc-500">Filter listings</div>
+              </div>
+            </div>
 
-        {/* Search Bar */}
-        <div style={styles.searchContainer}>
-            <div className="tour-search-bar" style={styles.searchWrapper}>
-                <FaSearch style={styles.searchIcon} />
-                <input 
-                    type="text" 
-                    placeholder="Search for lamps, chairs, plants..." 
+            <div className="mt-5 space-y-2">
+              {CATEGORIES.map((cat) => {
+                const active = cat.key === selectedCategory;
+                return (
+                  <button
+                    key={cat.label}
+                    onClick={() => setSelectedCategory(cat.key)}
+                    className={cn(
+                      "w-full rounded-xl px-3 py-2 text-left text-sm font-medium transition",
+                      active
+                        ? "bg-emerald-500 text-white shadow-sm"
+                        : "text-zinc-700 hover:bg-zinc-100"
+                    )}
+                  >
+                    {cat.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Location dropdown */}
+            <div className="mt-6">
+              <div className="mb-2 text-xs font-semibold text-zinc-500">Location</div>
+              <div className="relative">
+                <FaMapMarkerAlt className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <select
+                  value={selectedHub}
+                  onChange={(e) => setSelectedHub(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-zinc-200 bg-white px-9 py-2 text-sm text-zinc-800 outline-none transition focus:ring-2 focus:ring-emerald-500/40"
+                >
+                  <option value="">All locations</option>
+                  {LOCATIONS.filter(Boolean).map((loc) => (
+                    <option key={loc} value={loc}>
+                      {loc}
+                    </option>
+                  ))}
+                </select>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs">
+                  ▼
+                </span>
+              </div>
+            </div>
+
+            {/* Open map card (UI only) */}
+            <button
+              type="button"
+              className="mt-6 w-full rounded-2xl bg-emerald-500/10 p-5 text-center ring-1 ring-emerald-500/20 hover:bg-emerald-500/15 transition"
+              onClick={() => alert("Map UI coming soon (hook this to your map drawer).")}
+            >
+              <div className="mx-auto mb-2 h-10 w-10 rounded-2xl bg-white ring-1 ring-emerald-500/20 grid place-items-center">
+                <FaMapMarkerAlt className="text-emerald-600" />
+              </div>
+              <div className="text-sm font-semibold text-zinc-900">Open Map</div>
+              <div className="text-xs text-zinc-500">View nearby listings</div>
+            </button>
+
+            {/* Clear filters */}
+            {(selectedCategory || selectedHub || searchTerm) && (
+              <button
+                className="mt-5 w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-100 transition"
+                onClick={() => {
+                  setSelectedCategory("");
+                  setSelectedHub("");
+                  setSearchTerm("");
+                }}
+              >
+                Clear filters
+              </button>
+            )}
+          </aside>
+
+          {/* Main content */}
+          <main>
+            {/* Top bar: Search + Sort */}
+            <div className="flex flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-zinc-200 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-emerald-500 grid place-items-center shadow-sm">
+                  <FaSearch className="text-white" />
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-zinc-900">Discover Near You</div>
+                  <div className="text-sm text-zinc-500">
+                    Browsing: <span className="font-semibold text-zinc-800">{activeCategoryLabel}</span>
+                    {selectedHub ? (
+                      <>
+                        {" "}
+                        • <span className="font-semibold text-zinc-800">{selectedHub}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end md:gap-4">
+                {/* Search input */}
+                <div className="relative w-full md:w-[420px]">
+                  <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  <input
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    style={styles.searchInput}
-                />
-            </div>
-        </div>
+                    placeholder="Find sustainable goods near you…"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-9 py-2 text-sm text-zinc-900 outline-none transition focus:bg-white focus:ring-2 focus:ring-emerald-500/40"
+                  />
+                </div>
 
-        {/* Filter Bar */}
-        <div style={styles.filterBar}>
-            {/* Category */}
-            <div style={styles.selectWrapper}>
-                <FaTag style={styles.selectIcon} />
-                <select 
-                    value={selectedCategory} 
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    style={styles.select}
-                >
-                    <option value="" style={{ color: 'black' }}>All Categories</option>
-                    {CATEGORIES.map(cat => (
-                        <option key={cat} value={cat} style={{ color: 'black' }}>{cat}</option>
-                    ))}
-                </select>
-                <div style={styles.dropdownArrow}>▼</div>
-            </div>
-
-            {/* Location */}
-            <div style={styles.selectWrapper}>
-                <FaMapMarkerAlt style={styles.selectIcon} />
-                <select 
-                    value={selectedHub} 
-                    onChange={(e) => setSelectedHub(e.target.value)}
-                    style={styles.select}
-                >
-                    <option value="" style={{ color: 'black' }}>All Locations</option>
-                    {LOCATIONS.map(loc => (
-                        <option key={loc} value={loc} style={{ color: 'black' }}>{loc}</option>
-                    ))}
-                </select>
-                <div style={styles.dropdownArrow}>▼</div>
+                {/* Sort */}
+                <div className="relative">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="appearance-none rounded-xl border border-zinc-200 bg-white px-4 py-2 pr-10 text-sm font-semibold text-zinc-800 outline-none transition hover:bg-zinc-50 focus:ring-2 focus:ring-emerald-500/40"
+                  >
+                    <option value="newest">Sort by: Newest</option>
+                    <option value="oldest">Sort by: Oldest</option>
+                    <option value="az">Sort by: A–Z</option>
+                    <option value="za">Sort by: Z–A</option>
+                  </select>
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs">
+                    ▼
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* Clear Button */}
-            {(selectedCategory || selectedHub) && (
-                <button 
-                    onClick={() => { setSelectedCategory(""); setSelectedHub(""); }}
-                    style={styles.clearBtn}
+            {/* States */}
+            {loading && page === 1 ? (
+              <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-[330px] animate-pulse rounded-2xl bg-white p-4 shadow-sm ring-1 ring-zinc-200"
+                  >
+                    <div className="h-44 rounded-xl bg-zinc-100" />
+                    <div className="mt-4 h-4 w-2/3 rounded bg-zinc-100" />
+                    <div className="mt-2 h-3 w-1/2 rounded bg-zinc-100" />
+                    <div className="mt-6 h-10 w-full rounded-xl bg-zinc-100" />
+                  </div>
+                ))}
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="mt-8 rounded-2xl bg-white p-10 text-center shadow-sm ring-1 ring-zinc-200">
+                <div className="text-lg font-bold text-zinc-900">No items found</div>
+                <div className="mt-2 text-sm text-zinc-500">
+                  Try a different keyword or clear your filters.
+                </div>
+                <button
+                  className="mt-5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition"
+                  onClick={() => {
+                    setSelectedCategory("");
+                    setSelectedHub("");
+                    setSearchTerm("");
+                  }}
                 >
-                    Clear Filters
+                  Reset filters
                 </button>
-            )}
-        </div>
-      </div>
+              </div>
+            ) : (
+              <>
+                {/* Grid */}
+                <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredItems.map((item) => {
+                    const displayImage = getDisplayImage(item);
+                    const title = item.title || item.name || "Untitled";
+                    const hub = item.hubLocation || "Unknown";
+                    const category = item.category || "General";
 
-      {/* --- LISTINGS GRID --- */}
-      <div style={styles.listingsSection}>
-        <h2 style={styles.sectionTitle}>
-            {selectedCategory || selectedHub ? 'Filtered Results' : 'Fresh Listings'}
-        </h2>
-        
-        {loading && page === 1 ? (
-           <p style={{textAlign: 'center', marginTop: '40px', color: '#666'}}>Loading items...</p>
-        ) : filteredItems.length === 0 ? (
-           <div style={styles.emptyState}>
-              <p>No items found matching your criteria.</p>
-              <button onClick={() => {setSearchTerm(""); setSelectedCategory(""); setSelectedHub("")}} style={styles.resetBtn}>
-                 Reset All Filters
-              </button>
-           </div>
-        ) : (
-          <>
-              <div style={styles.grid}>
-                {filteredItems.map(item => {
-                    const displayImage = item.images && item.images.length > 0 
-                        ? item.images[0] 
-                        : (item.image || "https://placehold.co/400x300?text=No+Image");
+                    const canDelete =
+                      user &&
+                      (user.role === "admin" || user.googleId === item.googleId);
 
-                    const canDelete = user && (user.role === 'admin' || user.googleId === item.googleId);
+                    const isFav = favorites.has(item._id);
 
                     return (
-                      <Link to={`/item/${item._id}`} key={item._id} style={styles.cardLink}>
-                        <div style={styles.card}>
-                          <div style={styles.imageWrapper}>
-                            <img 
-                              src={displayImage}
-                              alt={item.title} 
-                              style={styles.cardImage}
-                              onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }} 
-                            />
+                      <Link
+                        to={`/item/${item._id}`}
+                        key={item._id}
+                        className="group rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 transition hover:-translate-y-0.5 hover:shadow-md"
+                      >
+                        {/* Image */}
+                        <div className="relative overflow-hidden rounded-t-2xl">
+                          <img
+                            src={displayImage}
+                            alt={title}
+                            className="h-52 w-full object-cover transition duration-300 group-hover:scale-[1.02]"
+                            onError={(e) => {
+                              e.currentTarget.src =
+                                "https://placehold.co/900x700?text=Error";
+                            }}
+                          />
+
+                          {/* Category badge */}
+                          <div className="absolute left-4 top-4">
+                            <span className="rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-white shadow-sm">
+                              {category.toUpperCase()}
+                            </span>
                           </div>
-                          
-                          <div style={styles.cardContent}>
-                            <h3 style={styles.cardTitle}>{item.title || item.name}</h3>
-                            
-                            <div style={styles.cardMeta}>
-                                <span>📍 {item.hubLocation || "Unknown"}</span>
-                                <span>🏷️ {item.category || "General"}</span>
+
+                          {/* Heart */}
+                          <button
+                            className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-zinc-800 shadow-sm ring-1 ring-zinc-200 hover:bg-white"
+                            onClick={(e) => toggleFav(e, item._id)}
+                            aria-label="Toggle favorite"
+                            title="Save"
+                          >
+                            {isFav ? (
+                              <FaHeart className="text-emerald-600" />
+                            ) : (
+                              <FaRegHeart className="text-zinc-700" />
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-base font-bold text-zinc-900">
+                                {title}
+                              </div>
+                              <div className="mt-1 line-clamp-2 text-sm text-zinc-500">
+                                {item.description
+                                  ? item.description
+                                  : "Looking to trade or give away sustainably."}
+                              </div>
                             </div>
 
-                            {canDelete && (
-                                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #eee', textAlign: 'right' }}>
-                                    <button 
-                                        onClick={(e) => handleDelete(e, item._id)}
-                                        style={styles.deleteBtn}
-                                    >
-                                        <FaTrash style={{ marginRight: '5px' }} /> Delete
-                                    </button>
-                                </div>
-                            )}
+                            {/* IMPORTANT: No pricing here. Removed. */}
                           </div>
+
+                          {/* Footer row */}
+                          <div className="mt-4 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm text-zinc-600">
+                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-zinc-100 text-xs font-bold text-zinc-700">
+                                {(item.ownerName || item.owner || "U")[0]?.toUpperCase()}
+                              </span>
+                              <span className="truncate max-w-[160px]">
+                                {item.ownerName || item.owner || "Community Member"}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2 text-sm text-zinc-500">
+                              <FaMapMarkerAlt className="text-zinc-400" />
+                              <span className="truncate max-w-[140px]">{hub}</span>
+                            </div>
+                          </div>
+
+                          {/* Delete row (only if allowed) */}
+                          {canDelete && (
+                            <div className="mt-4 flex justify-end border-t border-zinc-100 pt-3">
+                              <button
+                                onClick={(e) => handleDelete(e, item._id)}
+                                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100 transition"
+                              >
+                                <FaTrash />
+                                Delete
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </Link>
                     );
-                })}
-              </div>
+                  })}
+                </div>
 
-              {/* 👇 NEW: Load More Button */}
-              {hasMore && (
-                  <div style={styles.loadMoreContainer}>
-                      <button 
-                          onClick={() => {
-                              const nextPage = page + 1;
-                              setPage(nextPage);
-                              fetchItems(nextPage);
-                          }}
-                          style={styles.loadMoreBtn}
-                          disabled={loading}
-                      >
-                          {loading ? "Loading..." : "Load More Items"}
-                      </button>
+                {/* Load more */}
+                {hasMore && (
+                  <div className="mt-8 flex justify-center">
+                    <button
+                      onClick={() => {
+                        const next = page + 1;
+                        setPage(next);
+                        fetchItems(next);
+                      }}
+                      disabled={loading}
+                      className={cn(
+                        "rounded-xl px-5 py-3 text-sm font-bold transition",
+                        loading
+                          ? "cursor-not-allowed bg-zinc-200 text-zinc-500"
+                          : "bg-emerald-600 text-white hover:bg-emerald-700"
+                      )}
+                    >
+                      {loading ? "Loading…" : "Show More Results"}
+                    </button>
                   </div>
-              )}
-          </>
-        )}
+                )}
+              </>
+            )}
+          </main>
+        </div>
       </div>
     </div>
   );
 }
-
-// --- STYLES ---
-const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#f4f6f8', paddingBottom: '50px' },
-  hero: { 
-    backgroundColor: '#1B4332', 
-    color: 'white', 
-    padding: '60px 20px 80px', 
-    textAlign: 'center',
-    boxShadow: '0 4px 10px rgba(0,0,0,0.1)' 
-  },
-  heroTitle: { fontSize: '3rem', margin: '0 0 10px', fontWeight: '800' },
-  heroSubtitle: { fontSize: '1.1rem', opacity: 0.9, marginBottom: '30px' },
-  
-  searchContainer: { display: 'flex', justifyContent: 'center', marginBottom: '20px' },
-  searchWrapper: { 
-    position: 'relative', width: '100%', maxWidth: '600px', display: 'flex', alignItems: 'center' 
-  },
-  searchIcon: { position: 'absolute', left: '20px', color: '#1B4332', fontSize: '1.2rem', zIndex: 1 },
-  searchInput: { 
-    width: '100%', padding: '16px 20px 16px 50px', borderRadius: '50px', border: 'none', 
-    fontSize: '1rem', outline: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' 
-  },
-
-  filterBar: { 
-    display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', marginTop: '10px' 
-  },
-  selectWrapper: {
-    position: 'relative', display: 'flex', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)',
-    backdropFilter: 'blur(10px)', borderRadius: '30px', padding: '0 15px', border: '1px solid rgba(255,255,255,0.3)'
-  },
-  selectIcon: { color: 'white', marginRight: '8px', fontSize: '0.9rem' },
-  select: {
-    appearance: 'none', backgroundColor: 'transparent', border: 'none', color: 'white',
-    padding: '12px 25px 12px 5px', fontSize: '0.95rem', cursor: 'pointer', outline: 'none', fontWeight: '500'
-  },
-  dropdownArrow: {
-    position: 'absolute', right: '15px', color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem', pointerEvents: 'none'
-  },
-  clearBtn: {
-    backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.5)', color: 'white',
-    padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '0.85rem'
-  },
-
-  listingsSection: { 
-    maxWidth: '1200px', 
-    margin: '30px auto', 
-    padding: '0 20px' 
-  },
-  sectionTitle: { fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '25px', color: '#2D3748' },
-  
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '25px' },
-  
-  cardLink: { textDecoration: 'none', color: 'inherit' },
-  card: { 
-    backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', 
-    boxShadow: '0 2px 8px rgba(0,0,0,0.06)', transition: 'transform 0.2s, box-shadow 0.2s',
-    display: 'flex', flexDirection: 'column', height: '100%'
-  },
-  imageWrapper: { position: 'relative', height: '200px', backgroundColor: '#eee' },
-  cardImage: { width: '100%', height: '100%', objectFit: 'cover' },
-  
-  cardContent: { padding: '15px', display: 'flex', flexDirection: 'column', flexGrow: 1 },
-  cardTitle: { fontSize: '1.1rem', fontWeight: '700', marginBottom: '8px', color: '#2d3748', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  cardMeta: { display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#718096', marginBottom: 'auto' }, 
-  
-  deleteBtn: {
-    backgroundColor: '#fff5f5', color: '#e53e3e', border: '1px solid #fed7d7',
-    borderRadius: '8px', padding: '6px 12px', fontSize: '0.8rem', fontWeight: 'bold',
-    cursor: 'pointer', display: 'inline-flex', alignItems: 'center'
-  },
-  
-  emptyState: { textAlign: 'center', padding: '60px', color: '#666' },
-  resetBtn: {
-      marginTop: '15px', backgroundColor: '#1B4332', color: 'white', border: 'none',
-      padding: '10px 20px', borderRadius: '8px', cursor: 'pointer'
-  },
-
-  // 👇 NEW: Styles for the Load More section
-  loadMoreContainer: { display: 'flex', justifyContent: 'center', margin: '40px 0' },
-  loadMoreBtn: {
-      backgroundColor: '#1B4332', color: 'white', border: 'none', padding: '12px 30px',
-      borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold',
-      transition: 'background-color 0.2s'
-  }
-};
-
-export default Home;
