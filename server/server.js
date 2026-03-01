@@ -116,11 +116,10 @@ app.get('/api/items', async (req, res) => {
         if (hub) query.hubLocation = hub;
         if (category) query.category = category;
         
-        // 👇 Notice the .select('-embedding') we added!
-        const items = await Item.find(query)
-            .select('-embedding') // This strips out the massive AI math array
-            .sort({ createdAt: -1 })
-            .allowDiskUse(true);
+        // 👇 We force the allowDiskUse directly into the find() options here
+        const items = await Item.find(query, null, { allowDiskUse: true })
+            .select('-embedding') 
+            .sort({ createdAt: -1 });
             
         res.json(items);
     } catch (err) {
