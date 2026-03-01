@@ -34,7 +34,7 @@ function getInitial(name = "?") {
 
 // ✅ local helper to build a unique thread key
 function makeThreadKey(friendId, itemId) {
-  return `${friendId || "unknown"}__${itemId || "none"}`;
+  return `${String(friendId || "unknown")}__${String(itemId || "general")}`;
 }
 
 export default function Inbox({ user }) {
@@ -47,7 +47,7 @@ export default function Inbox({ user }) {
   // ✅ active thread = (friendId + itemId)
   const [activeThread, setActiveThread] = useState({
     friendId: null,
-    itemId: null,
+    itemId: null, // null means "general"
     threadKey: null,
   });
 
@@ -64,18 +64,17 @@ export default function Inbox({ user }) {
   const [activeItem, setActiveItem] = useState(null);
   const [loadingItem, setLoadingItem] = useState(false);
 
-  // ✅ for auto-scroll
   const messagesEndRef = useRef(null);
 
   // ✅ Parse query params: /inbox?friendId=...&itemId=...
   const queryTarget = useMemo(() => {
     const sp = new URLSearchParams(location.search);
     const friendId = sp.get("friendId");
-    const itemId = sp.get("itemId");
+    const itemId = sp.get("itemId"); // might be null
     return { friendId, itemId };
   }, [location.search]);
 
-  // Load conversations
+  // ✅ Load conversations
   useEffect(() => {
     const fetchConversations = async () => {
       try {
@@ -87,22 +86,23 @@ export default function Inbox({ user }) {
         const data = res.data || [];
         setConversations(data);
 
-        // ✅ If URL specifies a thread, try to open it
+        // ✅ If URL specifies a thread, open it
         if (queryTarget.friendId) {
           const tk = makeThreadKey(queryTarget.friendId, queryTarget.itemId);
           setActiveThread({
             friendId: queryTarget.friendId,
-            itemId: queryTarget.itemId,
+            itemId: queryTarget.itemId || null,
             threadKey: tk,
           });
           return;
         }
 
-        // ✅ Otherwise open first conversation if available
+        // ✅ Otherwise open first conversation
         if (data.length > 0) {
           const first = data[0];
-          const friendId = first.conversationId; // your backend uses otherUserId as conversationId
+          const friendId = first.friendId || first.conversationId; // fallback just in case
           const itemId = first.itemId || null;
+
           setActiveThread({
             friendId,
             itemId,
@@ -121,19 +121,19 @@ export default function Inbox({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Active conversation object for header + list highlighting
+  // ✅ Active conversation object for header + list highlighting
   const activeConversation = useMemo(() => {
     if (!activeThread.friendId) return null;
+
     const tk = activeThread.threadKey;
     return (
-      conversations.find((c) => makeThreadKey(c.conversationId, c.itemId) === tk) ||
-      // fallback: match just friendId if no exact item thread exists
-      conversations.find((c) => c.conversationId === activeThread.friendId) ||
-      null
+      conversations.find(
+        (c) => makeThreadKey(c.friendId || c.conversationId, c.itemId) === tk
+      ) || null
     );
   }, [conversations, activeThread]);
 
-  // Filter conversations (client-side)
+  // ✅ Filter conversations
   const filteredConversations = useMemo(() => {
     const q = search.trim().toLowerCase();
     return conversations.filter((c) => {
@@ -148,49 +148,41 @@ export default function Inbox({ user }) {
     });
   }, [conversations, search, tab]);
 
-  // ✅ Fetch messages for active thread:
-  // We use your existing endpoint: GET /api/messages/:friendId
-  // then filter by itemId on the client.
+  // ✅ Fetch messages for active thread
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!activeThread.friendId) return;
 
-// ✅ Fetch messages for active conversation (item thread)
-useEffect(() => {
-  const fetchMessages = async () => {
-    if (!activeConversation) return;
+      setMsgError("");
+      setLoadingMsgs(true);
 
-    setMsgError("");
-    setLoadingMsgs(true);
-
-    try {
-      // If this conversation is item-based, use the thread endpoint
-      if (activeConversation?.itemId && activeConversation?.friendId) {
-        const res = await axios.get(`${API_BASE}/api/messages/thread`, {
-          params: {
-            friendId: activeConversation.friendId,
-            itemId: activeConversation.itemId,
-          },
-          withCredentials: true,
-        });
-
-        setMessages(res.data || []);
-      } else {
-        // fallback for old "general chat" conversations (no itemId)
-        const res = await axios.get(
-          `${API_BASE}/api/messages/${activeConversation.friendId || activeConversation.conversationId}`,
-          { withCredentials: true }
-        );
-        setMessages(res.data || []);
+      try {
+        // item thread
+        if (activeThread.itemId) {
+          const res = await axios.get(`${API_BASE}/api/messages/thread`, {
+            params: { friendId: activeThread.friendId, itemId: activeThread.itemId },
+            withCredentials: true,
+          });
+          setMessages(res.data || []);
+        } else {
+          // legacy/general chat thread
+          const res = await axios.get(
+            `${API_BASE}/api/messages/${activeThread.friendId}`,
+            { withCredentials: true }
+          );
+          setMessages(res.data || []);
+        }
+      } catch (err) {
+        console.error(err);
+        setMessages([]);
+        setMsgError("Failed to load messages.");
+      } finally {
+        setLoadingMsgs(false);
       }
-    } catch (err) {
-      console.error(err);
-      setMessages([]);
-      setMsgError("Failed to load messages.");
-    } finally {
-      setLoadingMsgs(false);
-    }
-  };
+    };
 
-  fetchMessages();
-}, [activeConversationId, activeConversation]);
+    fetchMessages();
+  }, [activeThread.friendId, activeThread.itemId]);
 
   // ✅ Fetch item preview for active thread
   useEffect(() => {
@@ -217,45 +209,50 @@ useEffect(() => {
     fetchItem();
   }, [activeThread.itemId]);
 
-  // ✅ Auto-scroll inside chat panel only
+  // ✅ Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loadingMsgs]);
 
-  // ✅ Send message tied to the active thread
+  // ✅ Send message
   const sendMessage = async () => {
-  const text = draft.trim();
-  if (!text || !activeConversation) return;
+    const text = draft.trim();
+    if (!text || !activeThread.friendId) return;
 
-  const receiverId = activeConversation.friendId || activeConversation.conversationId;
+    // If your server currently REQUIRES itemId, you have 2 choices:
+    // A) enforce item-only chat (recommended)
+    // B) let "general" be a thread. (server must accept it)
+    //
+    // Here: we send itemId if it exists, otherwise we send nothing.
+    // If your server still requires itemId, general chats will fail to send
+    // until you relax the server validation.
+    const payload = {
+      receiverId: activeThread.friendId,
+      text,
+      ...(activeThread.itemId ? { itemId: activeThread.itemId } : {}),
+    };
 
-  const optimistic = {
-    _id: `tmp-${Date.now()}`,
-    senderId: user?._id,
-    receiverId,
-    itemId: activeConversation.itemId || null,
-    text,
-    timestamp: new Date().toISOString(),
+    const optimistic = {
+      _id: `tmp-${Date.now()}`,
+      senderId: user?._id,
+      receiverId: activeThread.friendId,
+      itemId: activeThread.itemId || null,
+      text,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, optimistic]);
+    setDraft("");
+
+    try {
+      await axios.post(`${API_BASE}/api/messages`, payload, {
+        withCredentials: true,
+      });
+    } catch (err) {
+      console.error(err);
+      setMsgError("Failed to send message.");
+    }
   };
-
-  setMessages((prev) => [...prev, optimistic]);
-  setDraft("");
-
-  try {
-    await axios.post(
-      `${API_BASE}/api/messages`,
-      {
-        receiverId,
-        text,
-        itemId: activeConversation.itemId, // REQUIRED for item-thread chats in your server
-      },
-      { withCredentials: true }
-    );
-  } catch (err) {
-    console.error(err);
-    setMsgError("Failed to send message.");
-  }
-};
 
   if (loadingConvos) {
     return (
@@ -351,21 +348,19 @@ useEffect(() => {
               ) : (
                 filteredConversations.map((chat) => {
                   const name = chat?.otherUser?.username || "Unknown";
-                  const friendId = chat.conversationId;
-                  const itemId = chat.itemId || null;
-                  const threadKey = makeThreadKey(friendId, itemId);
 
+                  // ✅ use friendId from backend (fallback if needed)
+                  const friendId = chat.friendId || chat.conversationId;
+                  const itemId = chat.itemId || null;
+
+                  const threadKey = makeThreadKey(friendId, itemId);
                   const isActive = threadKey === activeThread.threadKey;
 
                   return (
                     <button
                       key={threadKey}
                       onClick={() =>
-                        setActiveThread({
-                          friendId,
-                          itemId,
-                          threadKey,
-                        })
+                        setActiveThread({ friendId, itemId, threadKey })
                       }
                       className={cn(
                         "w-full border-l-4 px-4 py-4 text-left transition",
@@ -392,13 +387,8 @@ useEffect(() => {
                             </span>
                           </div>
 
-                          {/* ✅ show item title if backend provides it later; for now show itemId indicator */}
                           <p className="mt-1 truncate text-[11px] text-zinc-400">
-                            {chat.itemTitle
-                              ? `Item: ${chat.itemTitle}`
-                              : itemId
-                              ? "Item thread"
-                              : "General chat"}
+                            {itemId ? "Item thread" : "General chat"}
                           </p>
 
                           <p className="mt-1 truncate text-xs text-zinc-500">
@@ -463,7 +453,9 @@ useEffect(() => {
                   ) : (
                     <div className="flex flex-col gap-4">
                       {messages.map((m) => {
-                        const isMine = String(m.senderId || "") === String(user?._id || "");
+                        const isMine =
+                          String(m.senderId || "") === String(user?._id || "") ||
+                          String(m.senderId || "") === String(user?.googleId || "");
 
                         return (
                           <div
@@ -573,54 +565,14 @@ useEffect(() => {
                       : activeItem?.title || activeItem?.name || "Item title"}
                   </div>
                   <div className="mt-1 line-clamp-2 text-xs text-zinc-500">
-                    {activeItem?.description ||
-                      (activeThread.itemId
-                        ? "Loading details…"
-                        : "This chat is not linked to an item.")}
+                    {activeThread.itemId
+                      ? activeItem?.description || "Loading details…"
+                      : "This chat is not linked to an item."}
                   </div>
 
                   <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-700">
                     <FaMapMarkerAlt className="text-emerald-600" />
                     {activeItem?.hubLocation || "Location"}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-b border-zinc-100 p-4">
-              <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                Exchange Status
-              </div>
-
-              <div className="mt-4 space-y-4 text-sm">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-[11px] font-bold text-zinc-900">
-                    ✓
-                  </div>
-                  <div>
-                    <div className="font-bold text-zinc-900">Request Sent</div>
-                    <div className="text-[11px] text-zinc-500">
-                      A request was made for this item
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-emerald-500/15 text-[11px] font-bold text-zinc-900 ring-1 ring-emerald-500/20">
-                    ⏱
-                  </div>
-                  <div>
-                    <div className="font-bold text-zinc-900">Meet-up Proposed</div>
-                    <div className="text-[11px] text-zinc-500">Waiting for confirmation</div>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 opacity-60">
-                  <div className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-zinc-200 text-[11px] font-bold text-zinc-700">
-                    🤝
-                  </div>
-                  <div>
-                    <div className="font-bold text-zinc-900">Complete</div>
                   </div>
                 </div>
               </div>
