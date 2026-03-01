@@ -244,15 +244,13 @@ app.get('/api/messages/conversations', async (req, res) => {
 
       if (!conversationMap.has(otherUserId)) {
         conversationMap.set(otherUserId, {
-          conversationId: otherUserId,
-          otherUser: {
-            _id: otherUserId,
-            username: msg.senderId !== myId ? msg.senderName : "Chat User",
-          },
-          lastMessage: msg.text,
-          timestamp: msg.timestamp,
-          itemId: msg.itemId || null, // ✅ THIS MUST APPEAR IN THE RESPONSE
-          link: `/chat/${otherUserId}`,
+        conversationId: otherUserId,
+        debugVersion: "conversations-v2-itemid", // ✅ TEMP
+        otherUser: { _id: otherUserId, username: msg.senderId !== myId ? msg.senderName : "Chat User" },
+        lastMessage: msg.text,
+        timestamp: msg.timestamp,
+        itemId: msg.itemId || null,
+        link: `/chat/${otherUserId}`
         });
       }
     });
