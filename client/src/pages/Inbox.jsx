@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import {
@@ -32,20 +32,6 @@ function getInitial(name = "?") {
   return name?.trim()?.[0]?.toUpperCase?.() || "?";
 }
 
-/**
- * Expected conversation shape from your current endpoint:
- * {
- *  conversationId,
- *  link,
- *  lastMessage,
- *  timestamp,
- *  otherUser: { username, avatarUrl? }
- *  item?: { title, image, hubLocation, category, description }   // optional
- * }
- *
- * If your backend doesn't include item details yet, right pane will show placeholders.
- */
-
 export default function Messages({ user }) {
   const [conversations, setConversations] = useState([]);
   const [loadingConvos, setLoadingConvos] = useState(true);
@@ -62,6 +48,9 @@ export default function Messages({ user }) {
   const [msgError, setMsgError] = useState("");
   const [draft, setDraft] = useState("");
 
+  // keep scroll pinned to bottom when new messages come in
+  const bottomRef = useRef(null);
+
   // Load conversations
   useEffect(() => {
     const fetchConversations = async () => {
@@ -70,12 +59,12 @@ export default function Messages({ user }) {
         const res = await axios.get(`${API_BASE}/api/messages/conversations`, {
           withCredentials: true,
         });
-        setConversations(res.data || []);
+
+        const convos = res.data || [];
+        setConversations(convos);
 
         // Auto-open first conversation
-        if ((res.data || []).length > 0) {
-          setActiveConversationId(res.data[0].conversationId);
-        }
+        if (convos.length > 0) setActiveConversationId(convos[0].conversationId);
       } catch (err) {
         console.error(err);
         setError("Failed to load messages. Please try logging in again.");
@@ -88,7 +77,10 @@ export default function Messages({ user }) {
   }, []);
 
   const activeConversation = useMemo(() => {
-    return conversations.find((c) => c.conversationId === activeConversationId) || null;
+    return (
+      conversations.find((c) => c.conversationId === activeConversationId) ||
+      null
+    );
   }, [conversations, activeConversationId]);
 
   // Filter conversations (client-side)
@@ -98,7 +90,7 @@ export default function Messages({ user }) {
       const name = (c?.otherUser?.username || "Unknown").toLowerCase();
       const last = (c?.lastMessage || "").toLowerCase();
 
-      // Optional: donation filtering if your backend marks it
+      // Optional: donation/unread filtering if your backend ever provides these fields
       if (tab === "donations" && c?.type !== "donation") return false;
       if (tab === "unread" && !c?.unread) return false;
 
@@ -107,14 +99,7 @@ export default function Messages({ user }) {
     });
   }, [conversations, search, tab]);
 
-  /**
-   * Fetch messages for active conversation.
-   * ✅ You need an endpoint like:
-   * GET /api/messages/conversations/:conversationId
-   * or GET /api/messages/:conversationId
-   *
-   * If you don't have it yet, the UI still works but will show a placeholder.
-   */
+  // Fetch messages for active conversation (your backend route is GET /api/messages/:friendId)
   useEffect(() => {
     const fetchMessages = async () => {
       if (!activeConversationId) return;
@@ -123,22 +108,15 @@ export default function Messages({ user }) {
       setLoadingMsgs(true);
 
       try {
-        // 🔧 CHANGE THIS ENDPOINT to your real one
         const res = await axios.get(
-          `${API_BASE}/api/messages/conversations/${activeConversationId}`,
+          `${API_BASE}/api/messages/${activeConversationId}`,
           { withCredentials: true }
         );
-
         setMessages(res.data || []);
       } catch (err) {
-        // If endpoint doesn't exist yet, we just show no messages
-        console.warn("Messages endpoint not available yet:", err?.response?.status);
+        console.error(err);
         setMessages([]);
-        setMsgError(
-          err?.response?.status === 404
-            ? "Message thread endpoint not connected yet. UI is ready."
-            : "Failed to load messages."
-        );
+        setMsgError("Failed to load messages.");
       } finally {
         setLoadingMsgs(false);
       }
@@ -147,37 +125,46 @@ export default function Messages({ user }) {
     fetchMessages();
   }, [activeConversationId]);
 
-  /**
-   * Send message
-   * ✅ You need POST endpoint like:
-   * POST /api/messages/conversations/:conversationId
-   * body: { text }
-   */
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length, activeConversationId]);
+
+  // Send message (your backend route is POST /api/messages with { receiverId, text })
   const sendMessage = async () => {
     const text = draft.trim();
     if (!text || !activeConversationId) return;
 
-    // optimistic message (so it feels instant)
+    // optimistic message (matches your schema: senderId/receiverId/text)
     const optimistic = {
       _id: `tmp-${Date.now()}`,
-      conversationId: activeConversationId,
-      sender: user?.googleId || "me",
+      senderId: user?._id,
+      receiverId: activeConversationId,
       text,
       createdAt: new Date().toISOString(),
     };
+
     setMessages((prev) => [...prev, optimistic]);
     setDraft("");
 
+    // Update the left list immediately
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.conversationId === activeConversationId
+          ? { ...c, lastMessage: text, timestamp: new Date().toISOString() }
+          : c
+      )
+    );
+
     try {
-      // 🔧 CHANGE THIS ENDPOINT to your real one
       await axios.post(
-        `${API_BASE}/api/messages/conversations/${activeConversationId}`,
-        { text },
+        `${API_BASE}/api/messages`,
+        { receiverId: activeConversationId, text },
         { withCredentials: true }
       );
     } catch (err) {
       console.error(err);
-      setMsgError("Failed to send message (backend endpoint needed).");
+      setMsgError("Failed to send message.");
     }
   };
 
@@ -201,14 +188,17 @@ export default function Messages({ user }) {
   return (
     <div className="min-h-screen bg-zinc-50">
       <div className="mx-auto max-w-[1400px] px-4 py-6">
-        {/* Main 3-pane layout (header is your global NavBar already) */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr_320px]">
           {/* LEFT: conversation list */}
           <aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
             <div className="border-b border-zinc-100 p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-zinc-900">Messages</h3>
-                <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100">
+                <button
+                  type="button"
+                  className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"
+                  aria-label="Filter"
+                >
                   <FaFilter />
                 </button>
               </div>
@@ -218,7 +208,7 @@ export default function Messages({ user }) {
                 <button
                   onClick={() => setTab("all")}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-bold",
+                    "rounded-full px-3 py-1 text-xs font-bold transition",
                     tab === "all"
                       ? "bg-emerald-500 text-zinc-900"
                       : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
@@ -229,7 +219,7 @@ export default function Messages({ user }) {
                 <button
                   onClick={() => setTab("unread")}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-bold",
+                    "rounded-full px-3 py-1 text-xs font-bold transition",
                     tab === "unread"
                       ? "bg-emerald-500 text-zinc-900"
                       : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
@@ -240,7 +230,7 @@ export default function Messages({ user }) {
                 <button
                   onClick={() => setTab("donations")}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-bold",
+                    "rounded-full px-3 py-1 text-xs font-bold transition",
                     tab === "donations"
                       ? "bg-emerald-500 text-zinc-900"
                       : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
@@ -306,7 +296,6 @@ export default function Messages({ user }) {
                               {getInitial(name)}
                             </div>
                           )}
-                          {/* Online dot (optional) */}
                           <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
                         </div>
 
@@ -352,10 +341,17 @@ export default function Messages({ user }) {
               </div>
 
               <div className="flex items-center gap-2">
-                <button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20">
+                <button
+                  type="button"
+                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20"
+                >
                   <span className="text-[12px]">🤝</span> Finalize Exchange
                 </button>
-                <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100">
+                <button
+                  type="button"
+                  className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"
+                  aria-label="Notifications"
+                >
                   <FaBell />
                 </button>
               </div>
@@ -382,11 +378,10 @@ export default function Messages({ user }) {
                   ) : (
                     <div className="flex flex-col gap-4">
                       {messages.map((m) => {
-                        // Determine outgoing vs incoming:
-                        // Adjust this depending on your backend message schema.
-                        const senderId = m.sender || m.senderId || m.googleId;
-                        const isMine =
-                          senderId === user?.googleId || senderId === "me";
+                        // ✅ Correct "isMine" check for your schema:
+                        const senderId = (m.senderId ?? "").toString();
+                        const myId = (user?._id ?? "").toString();
+                        const isMine = senderId === myId;
 
                         return (
                           <div
@@ -400,7 +395,12 @@ export default function Messages({ user }) {
                               <div className="mt-1 h-8 w-8 shrink-0 rounded-full bg-zinc-200" />
                             ) : null}
 
-                            <div className={cn("flex flex-col gap-1", isMine && "items-end")}>
+                            <div
+                              className={cn(
+                                "flex flex-col gap-1",
+                                isMine && "items-end"
+                              )}
+                            >
                               <div
                                 className={cn(
                                   "rounded-2xl p-4 text-sm shadow-sm ring-1",
@@ -409,15 +409,21 @@ export default function Messages({ user }) {
                                     : "rounded-tl-none bg-white text-zinc-800 ring-zinc-200"
                                 )}
                               >
-                                {m.text || m.message || ""}
+                                {m.text || ""}
                               </div>
-                              <div className={cn("text-[10px] text-zinc-400", isMine ? "mr-1" : "ml-1")}>
+                              <div
+                                className={cn(
+                                  "text-[10px] text-zinc-400",
+                                  isMine ? "mr-1" : "ml-1"
+                                )}
+                              >
                                 {formatClock(m.createdAt || m.timestamp)}
                               </div>
                             </div>
                           </div>
                         );
                       })}
+                      <div ref={bottomRef} />
                     </div>
                   )}
                 </>
@@ -427,7 +433,11 @@ export default function Messages({ user }) {
             {/* Input */}
             <div className="border-t border-zinc-100 bg-white p-4">
               <div className="flex items-end gap-2 rounded-2xl border border-emerald-500/15 bg-zinc-50 p-2">
-                <button className="grid h-10 w-10 place-items-center rounded-xl text-zinc-500 hover:bg-zinc-200">
+                <button
+                  type="button"
+                  className="grid h-10 w-10 place-items-center rounded-xl text-zinc-500 hover:bg-zinc-200"
+                  aria-label="Add"
+                >
                   <FaPlus />
                 </button>
 
@@ -446,6 +456,7 @@ export default function Messages({ user }) {
                 />
 
                 <button
+                  type="button"
                   onClick={sendMessage}
                   className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500 text-zinc-900 hover:shadow-lg hover:shadow-emerald-500/20 transition"
                   aria-label="Send"
@@ -462,7 +473,7 @@ export default function Messages({ user }) {
             </div>
           </section>
 
-          {/* RIGHT: details pane */}
+          {/* RIGHT: details pane (placeholder until your backend links item data to conversations) */}
           <aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
             <div className="border-b border-zinc-100 p-4">
               <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -479,7 +490,8 @@ export default function Messages({ user }) {
                       "https://placehold.co/900x600?text=Item+Preview"
                     }
                     onError={(e) => {
-                      e.currentTarget.src = "https://placehold.co/900x600?text=No+Image";
+                      e.currentTarget.src =
+                        "https://placehold.co/900x600?text=No+Image";
                     }}
                   />
                   <div className="absolute right-2 top-2 rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-900">
@@ -504,7 +516,7 @@ export default function Messages({ user }) {
               </div>
             </div>
 
-            {/* Status */}
+            {/* Status (UI only for now) */}
             <div className="border-b border-zinc-100 p-4">
               <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                 Exchange Status
@@ -517,7 +529,9 @@ export default function Messages({ user }) {
                   </div>
                   <div>
                     <div className="font-bold text-zinc-900">Request Sent</div>
-                    <div className="text-[11px] text-zinc-500">A request was made for this item</div>
+                    <div className="text-[11px] text-zinc-500">
+                      A request was made for this item
+                    </div>
                   </div>
                 </div>
 
@@ -527,7 +541,9 @@ export default function Messages({ user }) {
                   </div>
                   <div>
                     <div className="font-bold text-zinc-900">Meet-up Proposed</div>
-                    <div className="text-[11px] text-zinc-500">Waiting for confirmation</div>
+                    <div className="text-[11px] text-zinc-500">
+                      Waiting for confirmation
+                    </div>
                   </div>
                 </div>
 
@@ -549,7 +565,8 @@ export default function Messages({ user }) {
                   Safety Tip
                 </div>
                 <div className="mt-1 text-[11px] text-amber-700">
-                  Always meet in a well-lit public place. Let someone know your location.
+                  Always meet in a well-lit public place. Let someone know your
+                  location.
                 </div>
               </div>
             </div>
