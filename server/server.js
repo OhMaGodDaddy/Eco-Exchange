@@ -115,10 +115,13 @@ app.get('/api/items', async (req, res) => {
         let query = { status: 'Available' };
         if (hub) query.hubLocation = hub;
         if (category) query.category = category;
-        const items = await Item.find(query).sort({ createdAt: -1 });
+        
+        // 👇 Notice the .allowDiskUse(true) added right at the end!
+        const items = await Item.find(query).sort({ createdAt: -1 }).allowDiskUse(true);
+        
         res.json(items);
     } catch (err) {
-        console.error("❌ CRASH IN GET /api/items:", err); // <-- THIS UNLOCKS THE LOGS
+        console.error("❌ CRASH IN GET /api/items:", err);
         res.status(500).json({ error: err.message });
     }
 });
