@@ -116,10 +116,11 @@ app.get('/api/items', async (req, res) => {
         if (hub) query.hubLocation = hub;
         if (category) query.category = category;
         
-        // 👇 We force the allowDiskUse directly into the find() options here
-        const items = await Item.find(query, null, { allowDiskUse: true })
+        // 👇 Removed the useless disk command, added .limit(20)
+        const items = await Item.find(query)
             .select('-embedding') 
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .limit(20); // This stops the memory from overloading!
             
         res.json(items);
     } catch (err) {
