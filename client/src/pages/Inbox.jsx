@@ -151,36 +151,46 @@ export default function Inbox({ user }) {
   // ✅ Fetch messages for active thread:
   // We use your existing endpoint: GET /api/messages/:friendId
   // then filter by itemId on the client.
-  useEffect(() => {
-    const fetchMessages = async () => {
-      if (!activeThread.friendId) return;
 
-      setMsgError("");
-      setLoadingMsgs(true);
+// ✅ Fetch messages for active conversation (item thread)
+useEffect(() => {
+  const fetchMessages = async () => {
+    if (!activeConversation) return;
 
-      try {
-        const res = await axios.get(`${API_BASE}/api/messages/${activeThread.friendId}`, {
+    setMsgError("");
+    setLoadingMsgs(true);
+
+    try {
+      // If this conversation is item-based, use the thread endpoint
+      if (activeConversation?.itemId && activeConversation?.friendId) {
+        const res = await axios.get(`${API_BASE}/api/messages/thread`, {
+          params: {
+            friendId: activeConversation.friendId,
+            itemId: activeConversation.itemId,
+          },
           withCredentials: true,
         });
 
-        const all = res.data || [];
-        const filtered =
-          activeThread.itemId
-            ? all.filter((m) => String(m.itemId || "") === String(activeThread.itemId))
-            : all.filter((m) => !m.itemId); // "general" chat without itemId
-
-        setMessages(filtered);
-      } catch (err) {
-        console.error(err);
-        setMessages([]);
-        setMsgError("Failed to load messages.");
-      } finally {
-        setLoadingMsgs(false);
+        setMessages(res.data || []);
+      } else {
+        // fallback for old "general chat" conversations (no itemId)
+        const res = await axios.get(
+          `${API_BASE}/api/messages/${activeConversation.friendId || activeConversation.conversationId}`,
+          { withCredentials: true }
+        );
+        setMessages(res.data || []);
       }
-    };
+    } catch (err) {
+      console.error(err);
+      setMessages([]);
+      setMsgError("Failed to load messages.");
+    } finally {
+      setLoadingMsgs(false);
+    }
+  };
 
-    fetchMessages();
-  }, [activeThread.friendId, activeThread.itemId]);
+  fetchMessages();
+}, [activeConversationId, activeConversation]);
 
   // ✅ Fetch item preview for active thread
   useEffect(() => {
@@ -214,37 +224,38 @@ export default function Inbox({ user }) {
 
   // ✅ Send message tied to the active thread
   const sendMessage = async () => {
-    const text = draft.trim();
-    if (!text || !activeThread.friendId) return;
+  const text = draft.trim();
+  if (!text || !activeConversation) return;
 
-    const optimistic = {
-      _id: `tmp-${Date.now()}`,
-      senderId: user?._id,
-      senderName: user?.displayName || user?.name || "Me",
-      receiverId: activeThread.friendId,
-      text,
-      itemId: activeThread.itemId || null,
-      timestamp: new Date().toISOString(),
-    };
+  const receiverId = activeConversation.friendId || activeConversation.conversationId;
 
-    setMessages((prev) => [...prev, optimistic]);
-    setDraft("");
-
-    try {
-      await axios.post(
-        `${API_BASE}/api/messages`,
-        {
-          receiverId: activeThread.friendId,
-          text,
-          itemId: activeThread.itemId || null,
-        },
-        { withCredentials: true }
-      );
-    } catch (err) {
-      console.error(err);
-      setMsgError("Failed to send message.");
-    }
+  const optimistic = {
+    _id: `tmp-${Date.now()}`,
+    senderId: user?._id,
+    receiverId,
+    itemId: activeConversation.itemId || null,
+    text,
+    timestamp: new Date().toISOString(),
   };
+
+  setMessages((prev) => [...prev, optimistic]);
+  setDraft("");
+
+  try {
+    await axios.post(
+      `${API_BASE}/api/messages`,
+      {
+        receiverId,
+        text,
+        itemId: activeConversation.itemId, // REQUIRED for item-thread chats in your server
+      },
+      { withCredentials: true }
+    );
+  } catch (err) {
+    console.error(err);
+    setMsgError("Failed to send message.");
+  }
+};
 
   if (loadingConvos) {
     return (
