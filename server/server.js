@@ -228,36 +228,45 @@ app.put('/api/messages/read/:senderId', async (req, res) => {
 });
 
 app.get('/api/messages/conversations', async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Please log in' });
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: 'Please log in' });
+  }
 
   const myId = req.user._id.toString();
 
   try {
-    const allMessages = await Message.find({
-      $or: [{ senderId: myId }, { receiverId: myId }],
-    }).sort({ timestamp: -1 });
+    const allMessages = await Message
+      .find({ $or: [{ senderId: myId }, { receiverId: myId }] })
+      .sort({ _id: -1 });
 
     const conversationMap = new Map();
 
     allMessages.forEach((msg) => {
-      const otherUserId = msg.senderId === myId ? msg.receiverId : msg.senderId;
+      const otherUserId = (msg.senderId === myId) ? msg.receiverId : msg.senderId;
 
       if (!conversationMap.has(otherUserId)) {
         conversationMap.set(otherUserId, {
-        conversationId: otherUserId,
-        debugVersion: "conversations-v2-itemid", // ✅ TEMP
-        otherUser: { _id: otherUserId, username: msg.senderId !== myId ? msg.senderName : "Chat User" },
-        lastMessage: msg.text,
-        timestamp: msg.timestamp,
-        itemId: msg.itemId || null,
-        link: `/chat/${otherUserId}`
+          conversationId: otherUserId,
+          debugVersion: "conversations-v2-itemid",
+
+          otherUser: {
+            _id: otherUserId,
+            username: (msg.senderId !== myId) ? msg.senderName : "Chat User"
+          },
+
+          lastMessage: msg.text,
+          timestamp: msg._id.getTimestamp(),
+          link: `/chat/${otherUserId}`,
+
+          // ✅ NEW: this is what powers the item preview
+          itemId: msg.itemId || null,
         });
       }
     });
 
     res.json(Array.from(conversationMap.values()));
   } catch (error) {
-    console.error("Conversations error:", error);
+    console.error("❌ conversations error:", error);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -268,13 +277,17 @@ app.post('/api/messages', async (req, res) => {
   }
 
   try {
+    const { receiverId, text, itemId } = req.body;
+
     const newMessage = new Message({
-      senderId: req.user._id.toString(),              // keep consistent (String in schema)
+      senderId: req.user._id.toString(),
       senderName: req.user.displayName || "Anonymous",
-      receiverId: req.body.receiverId,
-      itemId: req.body.itemId || null,                // ✅ NEW (links chat to item)
-      text: req.body.text,
-      isRead: false
+      receiverId: receiverId?.toString(),
+      text,
+      isRead: false,
+
+      // ✅ NEW
+      itemId: itemId || null,
     });
 
     await newMessage.save();
@@ -284,20 +297,29 @@ app.post('/api/messages', async (req, res) => {
   }
 });
 
-app.get('/api/messages/:friendId', async (req, res) => {
-    if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
-    try {
-        const myId = req.user._id;
-        const messages = await Message.find({
-            $or: [
-                { senderId: myId, receiverId: req.params.friendId },
-                { senderId: req.params.friendId, receiverId: myId }
-            ]
-        }).sort({ _id: 1 });
-        res.json(messages);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+app.get('/api/messages/conversations/:friendId/item', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: "Login required" });
+
+  const myId = req.user._id.toString();
+  const friendId = req.params.friendId.toString();
+
+  try {
+    const lastWithItem = await Message.findOne({
+      $or: [
+        { senderId: myId, receiverId: friendId },
+        { senderId: friendId, receiverId: myId }
+      ],
+      itemId: { $ne: null }
+    }).sort({ _id: -1 });
+
+    if (!lastWithItem?.itemId) return res.json(null);
+
+    const item = await Item.findById(lastWithItem.itemId).select("title description hubLocation category image images");
+    res.json(item || null);
+  } catch (err) {
+    console.error("❌ convo item error:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 
