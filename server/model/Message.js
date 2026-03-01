@@ -1,16 +1,25 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const messageSchema = new mongoose.Schema({
-  senderId: { type: String, required: true },
-  senderName: { type: String, required: true },
-  receiverId: { type: String, required: true },
+const messageSchema = new mongoose.Schema(
+  {
+    senderId: { type: String, required: true },
+    senderName: { type: String, required: true },
 
-  // ✅ NEW: link a message/conversation to an item
-  itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', default: null },
+    receiverId: { type: String, required: true },
 
-  text: { type: String, required: true },
-  isRead: { type: Boolean, default: false },
-  timestamp: { type: Date, default: Date.now }
-});
+    // ✅ NEW: tie message to an item thread
+    itemId: { type: String, required: true },
 
-module.exports = mongoose.model('Message', messageSchema);
+    // ✅ NEW: stable grouping key (same for both directions)
+    conversationKey: { type: String, required: true, index: true },
+
+    text: { type: String, required: true },
+    isRead: { type: Boolean, default: false },
+  },
+  { timestamps: true } // gives createdAt/updatedAt
+);
+
+// Useful indexes
+messageSchema.index({ conversationKey: 1, createdAt: 1 });
+
+module.exports = mongoose.model("Message", messageSchema);

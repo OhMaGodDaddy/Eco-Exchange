@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   FaSearch,
   FaFilter,
@@ -32,13 +32,25 @@ function getInitial(name = "?") {
   return name?.trim()?.[0]?.toUpperCase?.() || "?";
 }
 
+// ✅ local helper to build a unique thread key
+function makeThreadKey(friendId, itemId) {
+  return `${friendId || "unknown"}__${itemId || "none"}`;
+}
+
 export default function Inbox({ user }) {
+  const location = useLocation();
+
   const [conversations, setConversations] = useState([]);
   const [loadingConvos, setLoadingConvos] = useState(true);
   const [error, setError] = useState("");
 
-  // UI state
-  const [activeConversationId, setActiveConversationId] = useState(null);
+  // ✅ active thread = (friendId + itemId)
+  const [activeThread, setActiveThread] = useState({
+    friendId: null,
+    itemId: null,
+    threadKey: null,
+  });
+
   const [tab, setTab] = useState("all"); // all | unread | donations
   const [search, setSearch] = useState("");
 
@@ -55,6 +67,14 @@ export default function Inbox({ user }) {
   // ✅ for auto-scroll
   const messagesEndRef = useRef(null);
 
+  // ✅ Parse query params: /inbox?friendId=...&itemId=...
+  const queryTarget = useMemo(() => {
+    const sp = new URLSearchParams(location.search);
+    const friendId = sp.get("friendId");
+    const itemId = sp.get("itemId");
+    return { friendId, itemId };
+  }, [location.search]);
+
   // Load conversations
   useEffect(() => {
     const fetchConversations = async () => {
@@ -67,9 +87,27 @@ export default function Inbox({ user }) {
         const data = res.data || [];
         setConversations(data);
 
-        // Auto-open first conversation
+        // ✅ If URL specifies a thread, try to open it
+        if (queryTarget.friendId) {
+          const tk = makeThreadKey(queryTarget.friendId, queryTarget.itemId);
+          setActiveThread({
+            friendId: queryTarget.friendId,
+            itemId: queryTarget.itemId,
+            threadKey: tk,
+          });
+          return;
+        }
+
+        // ✅ Otherwise open first conversation if available
         if (data.length > 0) {
-          setActiveConversationId(data[0].conversationId);
+          const first = data[0];
+          const friendId = first.conversationId; // your backend uses otherUserId as conversationId
+          const itemId = first.itemId || null;
+          setActiveThread({
+            friendId,
+            itemId,
+            threadKey: makeThreadKey(friendId, itemId),
+          });
         }
       } catch (err) {
         console.error(err);
@@ -80,14 +118,20 @@ export default function Inbox({ user }) {
     };
 
     fetchConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Active conversation object for header + list highlighting
   const activeConversation = useMemo(() => {
+    if (!activeThread.friendId) return null;
+    const tk = activeThread.threadKey;
     return (
-      conversations.find((c) => c.conversationId === activeConversationId) ||
+      conversations.find((c) => makeThreadKey(c.conversationId, c.itemId) === tk) ||
+      // fallback: match just friendId if no exact item thread exists
+      conversations.find((c) => c.conversationId === activeThread.friendId) ||
       null
     );
-  }, [conversations, activeConversationId]);
+  }, [conversations, activeThread]);
 
   // Filter conversations (client-side)
   const filteredConversations = useMemo(() => {
@@ -96,7 +140,6 @@ export default function Inbox({ user }) {
       const name = (c?.otherUser?.username || "Unknown").toLowerCase();
       const last = (c?.lastMessage || "").toLowerCase();
 
-      // Optional: if you add these later from backend
       if (tab === "donations" && c?.type !== "donation") return false;
       if (tab === "unread" && !c?.unread) return false;
 
@@ -105,20 +148,28 @@ export default function Inbox({ user }) {
     });
   }, [conversations, search, tab]);
 
-  // ✅ Fetch messages for active conversation
+  // ✅ Fetch messages for active thread:
+  // We use your existing endpoint: GET /api/messages/:friendId
+  // then filter by itemId on the client.
   useEffect(() => {
     const fetchMessages = async () => {
-      if (!activeConversationId) return;
+      if (!activeThread.friendId) return;
 
       setMsgError("");
       setLoadingMsgs(true);
 
       try {
-        const res = await axios.get(
-          `${API_BASE}/api/messages/${activeConversationId}`,
-          { withCredentials: true }
-        );
-        setMessages(res.data || []);
+        const res = await axios.get(`${API_BASE}/api/messages/${activeThread.friendId}`, {
+          withCredentials: true,
+        });
+
+        const all = res.data || [];
+        const filtered =
+          activeThread.itemId
+            ? all.filter((m) => String(m.itemId || "") === String(activeThread.itemId))
+            : all.filter((m) => !m.itemId); // "general" chat without itemId
+
+        setMessages(filtered);
       } catch (err) {
         console.error(err);
         setMessages([]);
@@ -129,12 +180,12 @@ export default function Inbox({ user }) {
     };
 
     fetchMessages();
-  }, [activeConversationId]);
+  }, [activeThread.friendId, activeThread.itemId]);
 
-  // ✅ Fetch item preview when conversation changes
+  // ✅ Fetch item preview for active thread
   useEffect(() => {
     const fetchItem = async () => {
-      const itemId = activeConversation?.itemId;
+      const itemId = activeThread.itemId;
 
       if (!itemId) {
         setActiveItem(null);
@@ -154,24 +205,25 @@ export default function Inbox({ user }) {
     };
 
     fetchItem();
-  }, [activeConversation?.itemId]);
+  }, [activeThread.itemId]);
 
   // ✅ Auto-scroll inside chat panel only
   useEffect(() => {
-    // scroll after messages load / send
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loadingMsgs]);
 
-  // ✅ Send message (uses your existing backend)
+  // ✅ Send message tied to the active thread
   const sendMessage = async () => {
     const text = draft.trim();
-    if (!text || !activeConversationId) return;
+    if (!text || !activeThread.friendId) return;
 
     const optimistic = {
       _id: `tmp-${Date.now()}`,
-      senderId: user?._id, // your message schema uses senderId
-      receiverId: activeConversationId,
+      senderId: user?._id,
+      senderName: user?.displayName || user?.name || "Me",
+      receiverId: activeThread.friendId,
       text,
+      itemId: activeThread.itemId || null,
       timestamp: new Date().toISOString(),
     };
 
@@ -182,10 +234,9 @@ export default function Inbox({ user }) {
       await axios.post(
         `${API_BASE}/api/messages`,
         {
-          receiverId: activeConversationId,
+          receiverId: activeThread.friendId,
           text,
-          // optional: if you want to keep itemId tied to the conversation
-          itemId: activeConversation?.itemId || null,
+          itemId: activeThread.itemId || null,
         },
         { withCredentials: true }
       );
@@ -213,12 +264,10 @@ export default function Inbox({ user }) {
   }
 
   return (
-    // ✅ lock the page height so it doesn't grow with long chats
     <div className="h-[calc(100vh-64px)] bg-zinc-50">
       <div className="mx-auto h-full max-w-[1400px] px-4 py-6">
-        {/* Main 3-pane layout (NavBar is global) */}
         <div className="grid h-full grid-cols-1 gap-6 lg:grid-cols-[320px_1fr_320px]">
-          {/* LEFT: conversation list */}
+          {/* LEFT */}
           <aside className="h-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
             <div className="border-b border-zinc-100 p-4">
               <div className="flex items-center justify-between">
@@ -228,7 +277,6 @@ export default function Inbox({ user }) {
                 </button>
               </div>
 
-              {/* Tabs */}
               <div className="mt-3 flex gap-2">
                 <button
                   onClick={() => setTab("all")}
@@ -265,7 +313,6 @@ export default function Inbox({ user }) {
                 </button>
               </div>
 
-              {/* Search */}
               <div className="relative mt-4">
                 <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
                 <input
@@ -277,7 +324,6 @@ export default function Inbox({ user }) {
               </div>
             </div>
 
-            {/* Conversation list */}
             <div className="flex-1 overflow-y-auto">
               {filteredConversations.length === 0 ? (
                 <div className="p-6 text-center text-sm text-zinc-500">
@@ -294,13 +340,22 @@ export default function Inbox({ user }) {
               ) : (
                 filteredConversations.map((chat) => {
                   const name = chat?.otherUser?.username || "Unknown";
-                  const isActive =
-                    chat.conversationId === activeConversationId;
+                  const friendId = chat.conversationId;
+                  const itemId = chat.itemId || null;
+                  const threadKey = makeThreadKey(friendId, itemId);
+
+                  const isActive = threadKey === activeThread.threadKey;
 
                   return (
                     <button
-                      key={chat.conversationId}
-                      onClick={() => setActiveConversationId(chat.conversationId)}
+                      key={threadKey}
+                      onClick={() =>
+                        setActiveThread({
+                          friendId,
+                          itemId,
+                          threadKey,
+                        })
+                      }
                       className={cn(
                         "w-full border-l-4 px-4 py-4 text-left transition",
                         isActive
@@ -309,7 +364,6 @@ export default function Inbox({ user }) {
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        {/* Avatar */}
                         <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-zinc-200 ring-2 ring-emerald-500/20">
                           <div className="grid h-full w-full place-items-center text-lg font-bold text-zinc-700">
                             {getInitial(name)}
@@ -317,7 +371,6 @@ export default function Inbox({ user }) {
                           <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
                         </div>
 
-                        {/* Details */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <p className="truncate font-bold text-zinc-900">
@@ -327,6 +380,16 @@ export default function Inbox({ user }) {
                               {formatTime(chat.timestamp)}
                             </span>
                           </div>
+
+                          {/* ✅ show item title if backend provides it later; for now show itemId indicator */}
+                          <p className="mt-1 truncate text-[11px] text-zinc-400">
+                            {chat.itemTitle
+                              ? `Item: ${chat.itemTitle}`
+                              : itemId
+                              ? "Item thread"
+                              : "General chat"}
+                          </p>
+
                           <p className="mt-1 truncate text-xs text-zinc-500">
                             {chat.lastMessage || "—"}
                           </p>
@@ -339,9 +402,8 @@ export default function Inbox({ user }) {
             </div>
           </aside>
 
-          {/* CENTER: active chat */}
+          {/* CENTER */}
           <section className="h-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
-            {/* Chat header */}
             <div className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-100 px-5">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 overflow-hidden rounded-full bg-zinc-200 ring-2 ring-emerald-500/20">
@@ -370,7 +432,6 @@ export default function Inbox({ user }) {
               </div>
             </div>
 
-            {/* ✅ Chat scroll area (ONLY this scrolls) */}
             <div className="flex-1 overflow-y-auto bg-zinc-50 p-5">
               {loadingMsgs ? (
                 <div className="text-sm text-zinc-500">Loading messages…</div>
@@ -391,9 +452,7 @@ export default function Inbox({ user }) {
                   ) : (
                     <div className="flex flex-col gap-4">
                       {messages.map((m) => {
-                        const isMine =
-                          (m.senderId || "") === user?._id ||
-                          (m.senderId || "") === user?.googleId;
+                        const isMine = String(m.senderId || "") === String(user?._id || "");
 
                         return (
                           <div
@@ -407,12 +466,7 @@ export default function Inbox({ user }) {
                               <div className="mt-1 h-8 w-8 shrink-0 rounded-full bg-zinc-200" />
                             ) : null}
 
-                            <div
-                              className={cn(
-                                "flex flex-col gap-1",
-                                isMine && "items-end"
-                              )}
-                            >
+                            <div className={cn("flex flex-col gap-1", isMine && "items-end")}>
                               <div
                                 className={cn(
                                   "rounded-2xl p-4 text-sm shadow-sm ring-1",
@@ -423,12 +477,7 @@ export default function Inbox({ user }) {
                               >
                                 {m.text || ""}
                               </div>
-                              <div
-                                className={cn(
-                                  "text-[10px] text-zinc-400",
-                                  isMine ? "mr-1" : "ml-1"
-                                )}
-                              >
+                              <div className={cn("text-[10px] text-zinc-400", isMine ? "mr-1" : "ml-1")}>
                                 {formatClock(m.timestamp)}
                               </div>
                             </div>
@@ -442,7 +491,6 @@ export default function Inbox({ user }) {
               )}
             </div>
 
-            {/* Input (fixed at bottom of center pane) */}
             <div className="shrink-0 border-t border-zinc-100 bg-white p-4">
               <div className="flex items-end gap-2 rounded-2xl border border-emerald-500/15 bg-zinc-50 p-2">
                 <button className="grid h-10 w-10 place-items-center rounded-xl text-zinc-500 hover:bg-zinc-200">
@@ -480,7 +528,7 @@ export default function Inbox({ user }) {
             </div>
           </section>
 
-          {/* RIGHT: details pane */}
+          {/* RIGHT */}
           <aside className="h-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
             <div className="border-b border-zinc-100 p-4">
               <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -499,8 +547,7 @@ export default function Inbox({ user }) {
                       "https://placehold.co/900x600?text=Item+Preview"
                     }
                     onError={(e) => {
-                      e.currentTarget.src =
-                        "https://placehold.co/900x600?text=No+Image";
+                      e.currentTarget.src = "https://placehold.co/900x600?text=No+Image";
                     }}
                   />
                   <div className="absolute right-2 top-2 rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-900">
@@ -516,7 +563,9 @@ export default function Inbox({ user }) {
                   </div>
                   <div className="mt-1 line-clamp-2 text-xs text-zinc-500">
                     {activeItem?.description ||
-                      "Item details will appear here once linked to a listing."}
+                      (activeThread.itemId
+                        ? "Loading details…"
+                        : "This chat is not linked to an item.")}
                   </div>
 
                   <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-700">
@@ -527,7 +576,6 @@ export default function Inbox({ user }) {
               </div>
             </div>
 
-            {/* Status */}
             <div className="border-b border-zinc-100 p-4">
               <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                 Exchange Status
@@ -551,12 +599,8 @@ export default function Inbox({ user }) {
                     ⏱
                   </div>
                   <div>
-                    <div className="font-bold text-zinc-900">
-                      Meet-up Proposed
-                    </div>
-                    <div className="text-[11px] text-zinc-500">
-                      Waiting for confirmation
-                    </div>
+                    <div className="font-bold text-zinc-900">Meet-up Proposed</div>
+                    <div className="text-[11px] text-zinc-500">Waiting for confirmation</div>
                   </div>
                 </div>
 
@@ -571,15 +615,13 @@ export default function Inbox({ user }) {
               </div>
             </div>
 
-            {/* Safety */}
             <div className="p-4 mt-auto">
               <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200">
                 <div className="text-[10px] font-bold uppercase text-amber-700">
                   Safety Tip
                 </div>
                 <div className="mt-1 text-[11px] text-amber-700">
-                  Always meet in a well-lit public place. Let someone know your
-                  location.
+                  Always meet in a well-lit public place. Let someone know your location.
                 </div>
               </div>
             </div>

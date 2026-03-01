@@ -23,6 +23,11 @@ require('./config/passport');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+function makeConversationKey(userAId, userBId, itemId) {
+  const [a, b] = [String(userAId), String(userBId)].sort();
+  return `${a}_${b}_${String(itemId)}`;
+}
+
 app.set('trust proxy', 1);
 
 // --- MIDDLEWARE ---
@@ -227,67 +232,68 @@ app.put('/api/messages/read/:senderId', async (req, res) => {
     }
 });
 
-app.get('/api/messages/conversations', async (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ error: 'Please log in' });
-  }
+app.get("/api/messages/conversations", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: "Please log in" });
 
   const myId = req.user._id.toString();
 
   try {
-    const allMessages = await Message
-      .find({ $or: [{ senderId: myId }, { receiverId: myId }] })
-      .sort({ _id: -1 });
+    // newest first so first time we see a conversationKey = latest message for that thread
+    const allMessages = await Message.find({
+      $or: [{ senderId: myId }, { receiverId: myId }],
+    }).sort({ createdAt: -1 });
 
-    const conversationMap = new Map();
+    const map = new Map();
 
-    allMessages.forEach((msg) => {
-      const otherUserId = (msg.senderId === myId) ? msg.receiverId : msg.senderId;
+    for (const msg of allMessages) {
+      // each item thread has its own conversationKey
+      const key = msg.conversationKey || makeConversationKey(msg.senderId, msg.receiverId, msg.itemId);
 
-      if (!conversationMap.has(otherUserId)) {
-        conversationMap.set(otherUserId, {
-          conversationId: otherUserId,
-          debugVersion: "conversations-v2-itemid",
+      if (map.has(key)) continue;
 
-          otherUser: {
-            _id: otherUserId,
-            username: (msg.senderId !== myId) ? msg.senderName : "Chat User"
-          },
+      const otherUserId = msg.senderId === myId ? msg.receiverId : msg.senderId;
 
-          lastMessage: msg.text,
-          timestamp: msg._id.getTimestamp(),
-          link: `/chat/${otherUserId}`,
+      map.set(key, {
+        conversationKey: key,
+        conversationId: key,        // keep your frontend naming
+        friendId: otherUserId,      // ✅ needed to load thread
+        itemId: msg.itemId,         // ✅ needed for item preview + thread identity
+        otherUser: {
+          _id: otherUserId,
+          username: msg.senderId !== myId ? msg.senderName : "Chat User",
+        },
+        lastMessage: msg.text,
+        timestamp: msg.createdAt,
+      });
+    }
 
-          // ✅ NEW: this is what powers the item preview
-          itemId: msg.itemId || null,
-        });
-      }
-    });
-
-    res.json(Array.from(conversationMap.values()));
+    res.json(Array.from(map.values()));
   } catch (error) {
-    console.error("❌ conversations error:", error);
-    res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-app.post('/api/messages', async (req, res) => {
-  if (!req.isAuthenticated()) {
-    return res.status(401).json({ message: "Login required" });
-  }
+app.post("/api/messages", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
 
   try {
     const { receiverId, text, itemId } = req.body;
 
+    if (!receiverId || !text || !itemId) {
+      return res.status(400).json({ message: "receiverId, text, and itemId are required" });
+    }
+
+    const myId = req.user._id.toString();
+    const conversationKey = makeConversationKey(myId, receiverId, itemId);
+
     const newMessage = new Message({
-      senderId: req.user._id.toString(),
+      senderId: myId,
       senderName: req.user.displayName || "Anonymous",
-      receiverId: receiverId?.toString(),
+      receiverId,
+      itemId,
+      conversationKey,
       text,
       isRead: false,
-
-      // ✅ NEW
-      itemId: itemId || null,
     });
 
     await newMessage.save();
@@ -297,27 +303,21 @@ app.post('/api/messages', async (req, res) => {
   }
 });
 
-app.get('/api/messages/conversations/:friendId/item', async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ error: "Login required" });
-
-  const myId = req.user._id.toString();
-  const friendId = req.params.friendId.toString();
+app.get("/api/messages/thread", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
 
   try {
-    const lastWithItem = await Message.findOne({
-      $or: [
-        { senderId: myId, receiverId: friendId },
-        { senderId: friendId, receiverId: myId }
-      ],
-      itemId: { $ne: null }
-    }).sort({ _id: -1 });
+    const { friendId, itemId } = req.query;
+    if (!friendId || !itemId) {
+      return res.status(400).json({ message: "friendId and itemId are required" });
+    }
 
-    if (!lastWithItem?.itemId) return res.json(null);
+    const myId = req.user._id.toString();
+    const conversationKey = makeConversationKey(myId, friendId, itemId);
 
-    const item = await Item.findById(lastWithItem.itemId).select("title description hubLocation category image images");
-    res.json(item || null);
+    const messages = await Message.find({ conversationKey }).sort({ createdAt: 1 });
+    res.json(messages);
   } catch (err) {
-    console.error("❌ convo item error:", err);
     res.status(500).json({ error: err.message });
   }
 });
