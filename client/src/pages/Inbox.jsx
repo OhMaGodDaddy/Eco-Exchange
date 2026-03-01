@@ -1,162 +1,561 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import axios from 'axios';
+import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { Link } from "react-router-dom";
+import {
+  FaSearch,
+  FaFilter,
+  FaBell,
+  FaPaperPlane,
+  FaPlus,
+  FaMapMarkerAlt,
+} from "react-icons/fa";
 
-function Inbox() {
-    const [conversations, setConversations] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+const API_BASE = "https://eco-exchange-api.onrender.com";
 
-    useEffect(() => {
-        const fetchConversations = async () => {
-            try {
-                // Adjust this URL if your backend is running on a different port/url
-                const response = await axios.get('https://eco-exchange-api.onrender.com/api/messages/conversations', {
-                    withCredentials: true
-                });
-                setConversations(response.data);
-                setLoading(false);
-            } catch (err) {
-                console.error("Error fetching inbox:", err);
-                setError("Failed to load messages. Please try logging in again.");
-                setLoading(false);
-            }
-        };
-
-        fetchConversations();
-    }, []);
-
-    // --- INTERNAL STYLES ---
-    const styles = {
-        container: {
-            maxWidth: '600px',
-            margin: '40px auto',
-            padding: '20px',
-            background: 'white',
-            borderRadius: '12px',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-            fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
-        },
-        header: {
-            marginBottom: '20px',
-            color: '#333',
-            borderBottom: '2px solid #eee',
-            paddingBottom: '10px'
-        },
-        list: {
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '10px'
-        },
-        card: {
-            display: 'flex',
-            alignItems: 'center',
-            padding: '15px',
-            border: '1px solid #eee',
-            borderRadius: '8px',
-            textDecoration: 'none',
-            color: 'inherit',
-            transition: 'background 0.2s',
-            background: '#fff'
-        },
-        avatar: {
-            width: '50px',
-            height: '50px',
-            backgroundColor: '#2ecc71',
-            color: 'white',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '24px',
-            fontWeight: 'bold',
-            marginRight: '15px',
-            flexShrink: 0
-        },
-        details: {
-            flexGrow: 1
-        },
-        name: {
-            margin: 0,
-            fontSize: '16px',
-            color: '#2c3e50',
-            fontWeight: '600'
-        },
-        msg: {
-            margin: '5px 0 0',
-            color: '#7f8c8d',
-            fontSize: '14px'
-        },
-        time: {
-            fontSize: '12px',
-            color: '#bdc3c7',
-            whiteSpace: 'nowrap',
-            marginLeft: '10px'
-        },
-        empty: {
-            textAlign: 'center',
-            padding: '40px',
-            color: '#777'
-        },
-        btn: {
-            display: 'inline-block',
-            marginTop: '15px',
-            padding: '10px 20px',
-            backgroundColor: '#2ecc71',
-            color: 'white',
-            textDecoration: 'none',
-            borderRadius: '5px',
-            fontWeight: 'bold'
-        },
-        error: {
-            color: 'red',
-            textAlign: 'center',
-            marginTop: '20px'
-        }
-    };
-
-    if (loading) return <div style={styles.container}>Loading your chats...</div>;
-    if (error) return <div style={{...styles.container, ...styles.error}}>{error}</div>;
-
-    return (
-        <div style={styles.container}>
-            <h2 style={styles.header}>📬 My Messages</h2>
-            
-            {conversations.length === 0 ? (
-                <div style={styles.empty}>
-                    <p>No messages yet.</p>
-                    <Link to="/items" style={styles.btn}>Browse Items</Link>
-                </div>
-            ) : (
-                <div style={styles.list}>
-                    {conversations.map((chat) => (
-                        <Link 
-                            to={chat.link} 
-                            key={chat.conversationId} 
-                            style={styles.card}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
-                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}
-                        >
-                            <div style={styles.avatar}>
-                                {chat.otherUser.username ? chat.otherUser.username.charAt(0).toUpperCase() : '?'}
-                            </div>
-                            <div style={styles.details}>
-                                <h3 style={styles.name}>{chat.otherUser.username || "Unknown"}</h3>
-                                <p style={styles.msg}>
-                                    {chat.lastMessage.length > 50 
-                                        ? chat.lastMessage.substring(0, 50) + '...' 
-                                        : chat.lastMessage}
-                                </p>
-                            </div>
-                            <span style={styles.time}>
-                                {new Date(chat.timestamp).toLocaleDateString()}
-                            </span>
-                        </Link>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
+function cn(...classes) {
+  return classes.filter(Boolean).join(" ");
 }
 
-export default Inbox;
+function formatTime(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleString([], { month: "short", day: "numeric" });
+}
+
+function formatClock(ts) {
+  if (!ts) return "";
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function getInitial(name = "?") {
+  return name?.trim()?.[0]?.toUpperCase?.() || "?";
+}
+
+/**
+ * Expected conversation shape from your current endpoint:
+ * {
+ *  conversationId,
+ *  link,
+ *  lastMessage,
+ *  timestamp,
+ *  otherUser: { username, avatarUrl? }
+ *  item?: { title, image, hubLocation, category, description }   // optional
+ * }
+ *
+ * If your backend doesn't include item details yet, right pane will show placeholders.
+ */
+
+export default function Messages({ user }) {
+  const [conversations, setConversations] = useState([]);
+  const [loadingConvos, setLoadingConvos] = useState(true);
+  const [error, setError] = useState("");
+
+  // UI state
+  const [activeConversationId, setActiveConversationId] = useState(null);
+  const [tab, setTab] = useState("all"); // all | unread | donations
+  const [search, setSearch] = useState("");
+
+  // Messages state (center pane)
+  const [messages, setMessages] = useState([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [msgError, setMsgError] = useState("");
+  const [draft, setDraft] = useState("");
+
+  // Load conversations
+  useEffect(() => {
+    const fetchConversations = async () => {
+      try {
+        setLoadingConvos(true);
+        const res = await axios.get(`${API_BASE}/api/messages/conversations`, {
+          withCredentials: true,
+        });
+        setConversations(res.data || []);
+
+        // Auto-open first conversation
+        if ((res.data || []).length > 0) {
+          setActiveConversationId(res.data[0].conversationId);
+        }
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load messages. Please try logging in again.");
+      } finally {
+        setLoadingConvos(false);
+      }
+    };
+
+    fetchConversations();
+  }, []);
+
+  const activeConversation = useMemo(() => {
+    return conversations.find((c) => c.conversationId === activeConversationId) || null;
+  }, [conversations, activeConversationId]);
+
+  // Filter conversations (client-side)
+  const filteredConversations = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return conversations.filter((c) => {
+      const name = (c?.otherUser?.username || "Unknown").toLowerCase();
+      const last = (c?.lastMessage || "").toLowerCase();
+
+      // Optional: donation filtering if your backend marks it
+      if (tab === "donations" && c?.type !== "donation") return false;
+      if (tab === "unread" && !c?.unread) return false;
+
+      if (!q) return true;
+      return name.includes(q) || last.includes(q);
+    });
+  }, [conversations, search, tab]);
+
+  /**
+   * Fetch messages for active conversation.
+   * ✅ You need an endpoint like:
+   * GET /api/messages/conversations/:conversationId
+   * or GET /api/messages/:conversationId
+   *
+   * If you don't have it yet, the UI still works but will show a placeholder.
+   */
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (!activeConversationId) return;
+
+      setMsgError("");
+      setLoadingMsgs(true);
+
+      try {
+        // 🔧 CHANGE THIS ENDPOINT to your real one
+        const res = await axios.get(
+          `${API_BASE}/api/messages/conversations/${activeConversationId}`,
+          { withCredentials: true }
+        );
+
+        setMessages(res.data || []);
+      } catch (err) {
+        // If endpoint doesn't exist yet, we just show no messages
+        console.warn("Messages endpoint not available yet:", err?.response?.status);
+        setMessages([]);
+        setMsgError(
+          err?.response?.status === 404
+            ? "Message thread endpoint not connected yet. UI is ready."
+            : "Failed to load messages."
+        );
+      } finally {
+        setLoadingMsgs(false);
+      }
+    };
+
+    fetchMessages();
+  }, [activeConversationId]);
+
+  /**
+   * Send message
+   * ✅ You need POST endpoint like:
+   * POST /api/messages/conversations/:conversationId
+   * body: { text }
+   */
+  const sendMessage = async () => {
+    const text = draft.trim();
+    if (!text || !activeConversationId) return;
+
+    // optimistic message (so it feels instant)
+    const optimistic = {
+      _id: `tmp-${Date.now()}`,
+      conversationId: activeConversationId,
+      sender: user?.googleId || "me",
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setDraft("");
+
+    try {
+      // 🔧 CHANGE THIS ENDPOINT to your real one
+      await axios.post(
+        `${API_BASE}/api/messages/conversations/${activeConversationId}`,
+        { text },
+        { withCredentials: true }
+      );
+    } catch (err) {
+      console.error(err);
+      setMsgError("Failed to send message (backend endpoint needed).");
+    }
+  };
+
+  if (loadingConvos) {
+    return (
+      <div className="min-h-[70vh] grid place-items-center text-zinc-600">
+        Loading your chats…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto mt-10 max-w-xl rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-zinc-200">
+        <div className="text-lg font-bold text-zinc-900">Oops</div>
+        <div className="mt-2 text-sm text-rose-600">{error}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-50">
+      <div className="mx-auto max-w-[1400px] px-4 py-6">
+        {/* Main 3-pane layout (header is your global NavBar already) */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr_320px]">
+          {/* LEFT: conversation list */}
+          <aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
+            <div className="border-b border-zinc-100 p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-zinc-900">Messages</h3>
+                <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100">
+                  <FaFilter />
+                </button>
+              </div>
+
+              {/* Tabs */}
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => setTab("all")}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-bold",
+                    tab === "all"
+                      ? "bg-emerald-500 text-zinc-900"
+                      : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                  )}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setTab("unread")}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-bold",
+                    tab === "unread"
+                      ? "bg-emerald-500 text-zinc-900"
+                      : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                  )}
+                >
+                  Unread
+                </button>
+                <button
+                  onClick={() => setTab("donations")}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-bold",
+                    tab === "donations"
+                      ? "bg-emerald-500 text-zinc-900"
+                      : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                  )}
+                >
+                  Donations
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="relative mt-4">
+                <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search conversations…"
+                  className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-9 py-2 text-sm outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/40"
+                />
+              </div>
+            </div>
+
+            {/* Conversation list */}
+            <div className="max-h-[calc(100vh-180px)] overflow-y-auto">
+              {filteredConversations.length === 0 ? (
+                <div className="p-6 text-center text-sm text-zinc-500">
+                  No conversations yet.
+                  <div className="mt-3">
+                    <Link
+                      to="/items"
+                      className="inline-flex rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-700"
+                    >
+                      Browse items
+                    </Link>
+                  </div>
+                </div>
+              ) : (
+                filteredConversations.map((chat) => {
+                  const name = chat?.otherUser?.username || "Unknown";
+                  const isActive = chat.conversationId === activeConversationId;
+
+                  return (
+                    <button
+                      key={chat.conversationId}
+                      onClick={() => setActiveConversationId(chat.conversationId)}
+                      className={cn(
+                        "w-full border-l-4 px-4 py-4 text-left transition",
+                        isActive
+                          ? "border-emerald-500 bg-emerald-500/10"
+                          : "border-transparent hover:bg-zinc-50"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* Avatar */}
+                        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-zinc-200 ring-2 ring-emerald-500/20">
+                          {chat?.otherUser?.avatarUrl ? (
+                            <img
+                              src={chat.otherUser.avatarUrl}
+                              alt={name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="grid h-full w-full place-items-center text-lg font-bold text-zinc-700">
+                              {getInitial(name)}
+                            </div>
+                          )}
+                          {/* Online dot (optional) */}
+                          <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
+                        </div>
+
+                        {/* Details */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate font-bold text-zinc-900">{name}</p>
+                            <span className="shrink-0 text-[10px] text-zinc-400">
+                              {formatTime(chat.timestamp)}
+                            </span>
+                          </div>
+                          <p className="mt-1 truncate text-xs text-zinc-500">
+                            {chat.lastMessage || "—"}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
+
+          {/* CENTER: active chat */}
+          <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
+            {/* Chat header */}
+            <div className="flex h-16 items-center justify-between border-b border-zinc-100 px-5">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 overflow-hidden rounded-full bg-zinc-200 ring-2 ring-emerald-500/20">
+                  <div className="grid h-full w-full place-items-center font-bold text-zinc-700">
+                    {getInitial(activeConversation?.otherUser?.username || "?")}
+                  </div>
+                </div>
+                <div>
+                  <div className="font-bold text-zinc-900">
+                    {activeConversation?.otherUser?.username || "Select a chat"}
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-emerald-600">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    Online
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20">
+                  <span className="text-[12px]">🤝</span> Finalize Exchange
+                </button>
+                <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100">
+                  <FaBell />
+                </button>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto bg-zinc-50 p-5">
+              {loadingMsgs ? (
+                <div className="text-sm text-zinc-500">Loading messages…</div>
+              ) : (
+                <>
+                  {msgError ? (
+                    <div className="mb-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-700 ring-1 ring-amber-200">
+                      {msgError}
+                    </div>
+                  ) : null}
+
+                  {messages.length === 0 ? (
+                    <div className="grid place-items-center py-16 text-center">
+                      <div className="rounded-2xl bg-white p-6 text-sm text-zinc-600 shadow-sm ring-1 ring-zinc-200">
+                        No messages yet. Say hi 👋
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      {messages.map((m) => {
+                        // Determine outgoing vs incoming:
+                        // Adjust this depending on your backend message schema.
+                        const senderId = m.sender || m.senderId || m.googleId;
+                        const isMine =
+                          senderId === user?.googleId || senderId === "me";
+
+                        return (
+                          <div
+                            key={m._id}
+                            className={cn(
+                              "flex max-w-[80%] gap-3",
+                              isMine ? "self-end flex-row-reverse" : "self-start"
+                            )}
+                          >
+                            {!isMine ? (
+                              <div className="mt-1 h-8 w-8 shrink-0 rounded-full bg-zinc-200" />
+                            ) : null}
+
+                            <div className={cn("flex flex-col gap-1", isMine && "items-end")}>
+                              <div
+                                className={cn(
+                                  "rounded-2xl p-4 text-sm shadow-sm ring-1",
+                                  isMine
+                                    ? "rounded-tr-none bg-emerald-500 text-zinc-900 ring-emerald-500/20"
+                                    : "rounded-tl-none bg-white text-zinc-800 ring-zinc-200"
+                                )}
+                              >
+                                {m.text || m.message || ""}
+                              </div>
+                              <div className={cn("text-[10px] text-zinc-400", isMine ? "mr-1" : "ml-1")}>
+                                {formatClock(m.createdAt || m.timestamp)}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Input */}
+            <div className="border-t border-zinc-100 bg-white p-4">
+              <div className="flex items-end gap-2 rounded-2xl border border-emerald-500/15 bg-zinc-50 p-2">
+                <button className="grid h-10 w-10 place-items-center rounded-xl text-zinc-500 hover:bg-zinc-200">
+                  <FaPlus />
+                </button>
+
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Type your message…"
+                  rows={1}
+                  className="max-h-32 flex-1 resize-none border-none bg-transparent py-2 text-sm outline-none focus:ring-0"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage();
+                    }
+                  }}
+                />
+
+                <button
+                  onClick={sendMessage}
+                  className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500 text-zinc-900 hover:shadow-lg hover:shadow-emerald-500/20 transition"
+                  aria-label="Send"
+                  title="Send"
+                >
+                  <FaPaperPlane />
+                </button>
+              </div>
+
+              <div className="mt-2 text-[11px] text-zinc-400">
+                Press <span className="font-semibold">Enter</span> to send,{" "}
+                <span className="font-semibold">Shift+Enter</span> for new line.
+              </div>
+            </div>
+          </section>
+
+          {/* RIGHT: details pane */}
+          <aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200">
+            <div className="border-b border-zinc-100 p-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Item Details
+              </div>
+
+              <div className="mt-4 overflow-hidden rounded-2xl ring-1 ring-zinc-200">
+                <div className="relative h-40 w-full bg-zinc-200">
+                  <img
+                    alt="Item"
+                    className="h-full w-full object-cover"
+                    src={
+                      activeConversation?.item?.image ||
+                      "https://placehold.co/900x600?text=Item+Preview"
+                    }
+                    onError={(e) => {
+                      e.currentTarget.src = "https://placehold.co/900x600?text=No+Image";
+                    }}
+                  />
+                  <div className="absolute right-2 top-2 rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-900">
+                    EXCHANGE
+                  </div>
+                </div>
+
+                <div className="p-3">
+                  <div className="font-bold text-zinc-900">
+                    {activeConversation?.item?.title || "Item title"}
+                  </div>
+                  <div className="mt-1 line-clamp-2 text-xs text-zinc-500">
+                    {activeConversation?.item?.description ||
+                      "Item details will appear here once linked to a listing."}
+                  </div>
+
+                  <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-700">
+                    <FaMapMarkerAlt className="text-emerald-600" />
+                    {activeConversation?.item?.hubLocation || "Location"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="border-b border-zinc-100 p-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Exchange Status
+              </div>
+
+              <div className="mt-4 space-y-4 text-sm">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-emerald-500 text-[11px] font-bold text-zinc-900">
+                    ✓
+                  </div>
+                  <div>
+                    <div className="font-bold text-zinc-900">Request Sent</div>
+                    <div className="text-[11px] text-zinc-500">A request was made for this item</div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-emerald-500/15 text-[11px] font-bold text-zinc-900 ring-1 ring-emerald-500/20">
+                    ⏱
+                  </div>
+                  <div>
+                    <div className="font-bold text-zinc-900">Meet-up Proposed</div>
+                    <div className="text-[11px] text-zinc-500">Waiting for confirmation</div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 opacity-60">
+                  <div className="mt-0.5 grid h-6 w-6 place-items-center rounded-full bg-zinc-200 text-[11px] font-bold text-zinc-700">
+                    🤝
+                  </div>
+                  <div>
+                    <div className="font-bold text-zinc-900">Complete</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Safety */}
+            <div className="p-4">
+              <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200">
+                <div className="text-[10px] font-bold uppercase text-amber-700">
+                  Safety Tip
+                </div>
+                <div className="mt-1 text-[11px] text-amber-700">
+                  Always meet in a well-lit public place. Let someone know your location.
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
