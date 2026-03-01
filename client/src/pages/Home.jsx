@@ -16,16 +16,21 @@ function Home({ user }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   
-  // Search & Filter State
+  // Search, Filter & Pagination State
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedHub, setSelectedHub] = useState("");
+  
+  // 👇 NEW: Pagination State
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
-  // 2. FETCH ITEMS
-  const fetchItems = async () => {
+  // 2. FETCH ITEMS (Now accepts a page number)
+  const fetchItems = async (pageNum = 1) => {
     setLoading(true);
     try {
-      const params = {};
+      // 👇 NEW: Pass the page number to the backend
+      const params = { page: pageNum };
       if (selectedCategory) params.category = selectedCategory;
       if (selectedHub) params.hub = selectedHub;
       
@@ -34,7 +39,22 @@ function Home({ user }) {
         withCredentials: true
       });
       
-      setItems(res.data);
+      const fetchedItems = res.data;
+
+      // 👇 NEW: Replace if page 1, append if page 2+
+      if (pageNum === 1) {
+        setItems(fetchedItems);
+      } else {
+        setItems(prevItems => [...prevItems, ...fetchedItems]);
+      }
+
+      // If the backend returned fewer than 20 items, we hit the end!
+      if (fetchedItems.length < 20) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
+
     } catch (err) {
       console.error("Error fetching items:", err);
     } finally {
@@ -42,8 +62,10 @@ function Home({ user }) {
     }
   };
 
+  // 👇 NEW: When filters change, reset to Page 1
   useEffect(() => {
-    fetchItems();
+    setPage(1);
+    fetchItems(1);
   }, [selectedCategory, selectedHub]);
 
   // 3. DELETE HANDLER
@@ -83,7 +105,6 @@ function Home({ user }) {
 
         {/* Search Bar */}
         <div style={styles.searchContainer}>
-            {/* 🎯 HERE IS THE STICKY NOTE: className="tour-search-bar" added below! */}
             <div className="tour-search-bar" style={styles.searchWrapper}>
                 <FaSearch style={styles.searchIcon} />
                 <input 
@@ -148,7 +169,7 @@ function Home({ user }) {
             {selectedCategory || selectedHub ? 'Filtered Results' : 'Fresh Listings'}
         </h2>
         
-        {loading ? (
+        {loading && page === 1 ? (
            <p style={{textAlign: 'center', marginTop: '40px', color: '#666'}}>Loading items...</p>
         ) : filteredItems.length === 0 ? (
            <div style={styles.emptyState}>
@@ -158,53 +179,69 @@ function Home({ user }) {
               </button>
            </div>
         ) : (
-          <div style={styles.grid}>
-            {filteredItems.map(item => {
-                // Determine Image
-                const displayImage = item.images && item.images.length > 0 
-                    ? item.images[0] 
-                    : (item.image || "https://placehold.co/400x300?text=No+Image");
+          <>
+              <div style={styles.grid}>
+                {filteredItems.map(item => {
+                    const displayImage = item.images && item.images.length > 0 
+                        ? item.images[0] 
+                        : (item.image || "https://placehold.co/400x300?text=No+Image");
 
-                // Determine if User Can Delete
-                const canDelete = user && (user.role === 'admin' || user.googleId === item.googleId);
+                    const canDelete = user && (user.role === 'admin' || user.googleId === item.googleId);
 
-                return (
-                  <Link to={`/item/${item._id}`} key={item._id} style={styles.cardLink}>
-                    <div style={styles.card}>
-                      <div style={styles.imageWrapper}>
-                        <img 
-                          src={displayImage}
-                          alt={item.title} 
-                          style={styles.cardImage}
-                          onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }} 
-                        />
-                      </div>
-                      
-                      <div style={styles.cardContent}>
-                        <h3 style={styles.cardTitle}>{item.title || item.name}</h3>
-                        
-                        <div style={styles.cardMeta}>
-                            <span>📍 {item.hubLocation || "Unknown"}</span>
-                            <span>🏷️ {item.category || "General"}</span>
-                        </div>
-
-                        {/* DELETE BUTTON (Conditionally Rendered) */}
-                        {canDelete && (
-                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #eee', textAlign: 'right' }}>
-                                <button 
-                                    onClick={(e) => handleDelete(e, item._id)}
-                                    style={styles.deleteBtn}
-                                >
-                                    <FaTrash style={{ marginRight: '5px' }} /> Delete
-                                </button>
+                    return (
+                      <Link to={`/item/${item._id}`} key={item._id} style={styles.cardLink}>
+                        <div style={styles.card}>
+                          <div style={styles.imageWrapper}>
+                            <img 
+                              src={displayImage}
+                              alt={item.title} 
+                              style={styles.cardImage}
+                              onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }} 
+                            />
+                          </div>
+                          
+                          <div style={styles.cardContent}>
+                            <h3 style={styles.cardTitle}>{item.title || item.name}</h3>
+                            
+                            <div style={styles.cardMeta}>
+                                <span>📍 {item.hubLocation || "Unknown"}</span>
+                                <span>🏷️ {item.category || "General"}</span>
                             </div>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                );
-            })}
-          </div>
+
+                            {canDelete && (
+                                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #eee', textAlign: 'right' }}>
+                                    <button 
+                                        onClick={(e) => handleDelete(e, item._id)}
+                                        style={styles.deleteBtn}
+                                    >
+                                        <FaTrash style={{ marginRight: '5px' }} /> Delete
+                                    </button>
+                                </div>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                })}
+              </div>
+
+              {/* 👇 NEW: Load More Button */}
+              {hasMore && (
+                  <div style={styles.loadMoreContainer}>
+                      <button 
+                          onClick={() => {
+                              const nextPage = page + 1;
+                              setPage(nextPage);
+                              fetchItems(nextPage);
+                          }}
+                          style={styles.loadMoreBtn}
+                          disabled={loading}
+                      >
+                          {loading ? "Loading..." : "Load More Items"}
+                      </button>
+                  </div>
+              )}
+          </>
         )}
       </div>
     </div>
@@ -286,6 +323,14 @@ const styles = {
   resetBtn: {
       marginTop: '15px', backgroundColor: '#1B4332', color: 'white', border: 'none',
       padding: '10px 20px', borderRadius: '8px', cursor: 'pointer'
+  },
+
+  // 👇 NEW: Styles for the Load More section
+  loadMoreContainer: { display: 'flex', justifyContent: 'center', margin: '40px 0' },
+  loadMoreBtn: {
+      backgroundColor: '#1B4332', color: 'white', border: 'none', padding: '12px 30px',
+      borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold',
+      transition: 'background-color 0.2s'
   }
 };
 

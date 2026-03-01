@@ -111,16 +111,20 @@ app.get('/api/logout', (req, res, next) => {
 // --- API ROUTES (Items) ---
 app.get('/api/items', async (req, res) => {
     try {
-        const { hub, category } = req.query;
+        // 👇 We added 'page' to the query, defaulting to 1
+        const { hub, category, page = 1 } = req.query; 
         let query = { status: 'Available' };
         if (hub) query.hubLocation = hub;
         if (category) query.category = category;
         
-        // 👇 Removed the useless disk command, added .limit(20)
+        const limit = 20; // Maximum items per page
+        const skip = (page - 1) * limit; // The math to figure out how many items to skip
+        
         const items = await Item.find(query)
             .select('-embedding') 
             .sort({ createdAt: -1 })
-            .limit(20); // This stops the memory from overloading!
+            .skip(skip) // 👇 Skips the items we already loaded
+            .limit(limit); 
             
         res.json(items);
     } catch (err) {
