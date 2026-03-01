@@ -368,10 +368,10 @@ app.post("/api/messages", async (req, res) => {
 /**
  * ✅ THREAD FETCH (what your Inbox.jsx currently calls)
  * Inbox.jsx does:
- *   GET /api/messages/${activeConversationId}
+ *   GET /api/messages/thread/${activeConversationId}
  * where activeConversationId == conversationKey
  */
-app.get("/api/messages/:conversationKey", async (req, res) => {
+app.get("/api/messages/thread/:conversationKey", async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
 
   try {
@@ -389,7 +389,38 @@ app.get("/api/messages/:conversationKey", async (req, res) => {
 
     res.json(messages);
   } catch (err) {
-    console.error("GET /api/messages/:conversationKey error:", err);
+    console.error("GET /api/messages/thread/:conversationKey error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ GET general chat messages between me and friend (no itemId thread)
+app.get("/api/messages/:friendId", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Login required" });
+  }
+
+  try {
+    const myId = String(req.user._id);
+    const friendId = String(req.params.friendId);
+
+    // Only "general chat" messages (legacy / non-item threads)
+    const messages = await Message.find({
+      $or: [
+        { senderId: myId, receiverId: friendId },
+        { senderId: friendId, receiverId: myId },
+      ],
+      $or: [
+        { itemId: null },
+        { itemId: { $exists: false } },
+      ],
+    })
+      .sort({ createdAt: 1 })
+      .lean();
+
+    res.json(messages);
+  } catch (err) {
+    console.error("GET /api/messages/:friendId error:", err);
     res.status(500).json({ error: err.message });
   }
 });
