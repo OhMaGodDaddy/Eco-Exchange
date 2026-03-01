@@ -19,7 +19,7 @@ function cn(...classes) {
 function formatTime(ts) {
   if (!ts) return "";
   const d = new Date(ts);
-  return d.toLocaleString([], { month: "short", day: "numeric" });
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 function formatClock(ts) {
@@ -32,7 +32,7 @@ function getInitial(name = "?") {
   return name?.trim()?.[0]?.toUpperCase?.() || "?";
 }
 
-export default function Messages({ user }) {
+export default function Inbox({ user }) {
   const [conversations, setConversations] = useState([]);
   const [loadingConvos, setLoadingConvos] = useState(true);
   const [error, setError] = useState("");
@@ -48,8 +48,12 @@ export default function Messages({ user }) {
   const [msgError, setMsgError] = useState("");
   const [draft, setDraft] = useState("");
 
-  // keep scroll pinned to bottom when new messages come in
-  const bottomRef = useRef(null);
+  // ✅ Item preview state (right pane)
+  const [activeItem, setActiveItem] = useState(null);
+  const [loadingItem, setLoadingItem] = useState(false);
+
+  // ✅ for auto-scroll
+  const messagesEndRef = useRef(null);
 
   // Load conversations
   useEffect(() => {
@@ -60,11 +64,13 @@ export default function Messages({ user }) {
           withCredentials: true,
         });
 
-        const convos = res.data || [];
-        setConversations(convos);
+        const data = res.data || [];
+        setConversations(data);
 
         // Auto-open first conversation
-        if (convos.length > 0) setActiveConversationId(convos[0].conversationId);
+        if (data.length > 0) {
+          setActiveConversationId(data[0].conversationId);
+        }
       } catch (err) {
         console.error(err);
         setError("Failed to load messages. Please try logging in again.");
@@ -83,10 +89,6 @@ export default function Messages({ user }) {
     );
   }, [conversations, activeConversationId]);
 
-  // Fallback for the right-hand "Item Details" pane — some conversations
-  // may include a linked item object. Use a safe optional lookup.
-  const activeItem = activeConversation?.item || null;
-
   // Filter conversations (client-side)
   const filteredConversations = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -94,7 +96,7 @@ export default function Messages({ user }) {
       const name = (c?.otherUser?.username || "Unknown").toLowerCase();
       const last = (c?.lastMessage || "").toLowerCase();
 
-      // Optional: donation/unread filtering if your backend ever provides these fields
+      // Optional: if you add these later from backend
       if (tab === "donations" && c?.type !== "donation") return false;
       if (tab === "unread" && !c?.unread) return false;
 
@@ -103,7 +105,7 @@ export default function Messages({ user }) {
     });
   }, [conversations, search, tab]);
 
-  // Fetch messages for active conversation (your backend route is GET /api/messages/:friendId)
+  // ✅ Fetch messages for active conversation
   useEffect(() => {
     const fetchMessages = async () => {
       if (!activeConversationId) return;
@@ -129,41 +131,62 @@ export default function Messages({ user }) {
     fetchMessages();
   }, [activeConversationId]);
 
-  // Auto-scroll to bottom when messages change
+  // ✅ Fetch item preview when conversation changes
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, activeConversationId]);
+    const fetchItem = async () => {
+      const itemId = activeConversation?.itemId;
 
-  // Send message (your backend route is POST /api/messages with { receiverId, text })
+      if (!itemId) {
+        setActiveItem(null);
+        return;
+      }
+
+      try {
+        setLoadingItem(true);
+        const res = await axios.get(`${API_BASE}/api/items/${itemId}`);
+        setActiveItem(res.data);
+      } catch (err) {
+        console.error("Failed to load item preview:", err);
+        setActiveItem(null);
+      } finally {
+        setLoadingItem(false);
+      }
+    };
+
+    fetchItem();
+  }, [activeConversation?.itemId]);
+
+  // ✅ Auto-scroll inside chat panel only
+  useEffect(() => {
+    // scroll after messages load / send
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loadingMsgs]);
+
+  // ✅ Send message (uses your existing backend)
   const sendMessage = async () => {
     const text = draft.trim();
     if (!text || !activeConversationId) return;
 
-    // optimistic message (matches your schema: senderId/receiverId/text)
     const optimistic = {
       _id: `tmp-${Date.now()}`,
-      senderId: user?._id,
+      senderId: user?._id, // your message schema uses senderId
       receiverId: activeConversationId,
       text,
-      createdAt: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, optimistic]);
     setDraft("");
 
-    // Update the left list immediately
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.conversationId === activeConversationId
-          ? { ...c, lastMessage: text, timestamp: new Date().toISOString() }
-          : c
-      )
-    );
-
     try {
       await axios.post(
         `${API_BASE}/api/messages`,
-        { receiverId: activeConversationId, text },
+        {
+          receiverId: activeConversationId,
+          text,
+          // optional: if you want to keep itemId tied to the conversation
+          itemId: activeConversation?.itemId || null,
+        },
         { withCredentials: true }
       );
     } catch (err) {
@@ -190,18 +213,17 @@ export default function Messages({ user }) {
   }
 
   return (
-    <div className="h-[calc(100vh-80px)] bg-zinc-50 overflow-hidden">
-        <div className="mx-auto max-w-[1400px] px-4 py-6 h-full overflow-hidden">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr_320px] h-full overflow-hidden">          
-            {/* LEFT: conversation list */}
-            <aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col h-full">            <div className="border-b border-zinc-100 p-4">
+    // ✅ lock the page height so it doesn't grow with long chats
+    <div className="h-[calc(100vh-64px)] bg-zinc-50">
+      <div className="mx-auto h-full max-w-[1400px] px-4 py-6">
+        {/* Main 3-pane layout (NavBar is global) */}
+        <div className="grid h-full grid-cols-1 gap-6 lg:grid-cols-[320px_1fr_320px]">
+          {/* LEFT: conversation list */}
+          <aside className="h-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
+            <div className="border-b border-zinc-100 p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-zinc-900">Messages</h3>
-                <button
-                  type="button"
-                  className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"
-                  aria-label="Filter"
-                >
+                <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100">
                   <FaFilter />
                 </button>
               </div>
@@ -211,7 +233,7 @@ export default function Messages({ user }) {
                 <button
                   onClick={() => setTab("all")}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-bold transition",
+                    "rounded-full px-3 py-1 text-xs font-bold",
                     tab === "all"
                       ? "bg-emerald-500 text-zinc-900"
                       : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
@@ -222,7 +244,7 @@ export default function Messages({ user }) {
                 <button
                   onClick={() => setTab("unread")}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-bold transition",
+                    "rounded-full px-3 py-1 text-xs font-bold",
                     tab === "unread"
                       ? "bg-emerald-500 text-zinc-900"
                       : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
@@ -233,7 +255,7 @@ export default function Messages({ user }) {
                 <button
                   onClick={() => setTab("donations")}
                   className={cn(
-                    "rounded-full px-3 py-1 text-xs font-bold transition",
+                    "rounded-full px-3 py-1 text-xs font-bold",
                     tab === "donations"
                       ? "bg-emerald-500 text-zinc-900"
                       : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
@@ -256,7 +278,8 @@ export default function Messages({ user }) {
             </div>
 
             {/* Conversation list */}
-            <div className="flex-1 overflow-y-auto">                  {filteredConversations.length === 0 ? (
+            <div className="flex-1 overflow-y-auto">
+              {filteredConversations.length === 0 ? (
                 <div className="p-6 text-center text-sm text-zinc-500">
                   No conversations yet.
                   <div className="mt-3">
@@ -271,7 +294,8 @@ export default function Messages({ user }) {
               ) : (
                 filteredConversations.map((chat) => {
                   const name = chat?.otherUser?.username || "Unknown";
-                  const isActive = chat.conversationId === activeConversationId;
+                  const isActive =
+                    chat.conversationId === activeConversationId;
 
                   return (
                     <button
@@ -287,24 +311,18 @@ export default function Messages({ user }) {
                       <div className="flex items-center gap-3">
                         {/* Avatar */}
                         <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-zinc-200 ring-2 ring-emerald-500/20">
-                          {chat?.otherUser?.avatarUrl ? (
-                            <img
-                              src={chat.otherUser.avatarUrl}
-                              alt={name}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="grid h-full w-full place-items-center text-lg font-bold text-zinc-700">
-                              {getInitial(name)}
-                            </div>
-                          )}
+                          <div className="grid h-full w-full place-items-center text-lg font-bold text-zinc-700">
+                            {getInitial(name)}
+                          </div>
                           <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
                         </div>
 
                         {/* Details */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="truncate font-bold text-zinc-900">{name}</p>
+                            <p className="truncate font-bold text-zinc-900">
+                              {name}
+                            </p>
                             <span className="shrink-0 text-[10px] text-zinc-400">
                               {formatTime(chat.timestamp)}
                             </span>
@@ -322,8 +340,9 @@ export default function Messages({ user }) {
           </aside>
 
           {/* CENTER: active chat */}
-        <section className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col h-full">            {/* Chat header */}
-            <div className="flex h-16 items-center justify-between border-b border-zinc-100 px-5">
+          <section className="h-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
+            {/* Chat header */}
+            <div className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-100 px-5">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 overflow-hidden rounded-full bg-zinc-200 ring-2 ring-emerald-500/20">
                   <div className="grid h-full w-full place-items-center font-bold text-zinc-700">
@@ -342,23 +361,16 @@ export default function Messages({ user }) {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20"
-                >
+                <button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20">
                   <span className="text-[12px]">🤝</span> Finalize Exchange
                 </button>
-                <button
-                  type="button"
-                  className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"
-                  aria-label="Notifications"
-                >
+                <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100">
                   <FaBell />
                 </button>
               </div>
             </div>
 
-            {/* Messages */}
+            {/* ✅ Chat scroll area (ONLY this scrolls) */}
             <div className="flex-1 overflow-y-auto bg-zinc-50 p-5">
               {loadingMsgs ? (
                 <div className="text-sm text-zinc-500">Loading messages…</div>
@@ -379,10 +391,9 @@ export default function Messages({ user }) {
                   ) : (
                     <div className="flex flex-col gap-4">
                       {messages.map((m) => {
-                        // ✅ Correct "isMine" check for your schema:
-                        const senderId = (m.senderId ?? "").toString();
-                        const myId = (user?._id ?? "").toString();
-                        const isMine = senderId === myId;
+                        const isMine =
+                          (m.senderId || "") === user?._id ||
+                          (m.senderId || "") === user?.googleId;
 
                         return (
                           <div
@@ -418,27 +429,23 @@ export default function Messages({ user }) {
                                   isMine ? "mr-1" : "ml-1"
                                 )}
                               >
-                                {formatClock(m.createdAt || m.timestamp)}
+                                {formatClock(m.timestamp)}
                               </div>
                             </div>
                           </div>
                         );
                       })}
-                      <div ref={bottomRef} />
+                      <div ref={messagesEndRef} />
                     </div>
                   )}
                 </>
               )}
             </div>
 
-            {/* Input */}
-            <div className="border-t border-zinc-100 bg-white p-4">
+            {/* Input (fixed at bottom of center pane) */}
+            <div className="shrink-0 border-t border-zinc-100 bg-white p-4">
               <div className="flex items-end gap-2 rounded-2xl border border-emerald-500/15 bg-zinc-50 p-2">
-                <button
-                  type="button"
-                  className="grid h-10 w-10 place-items-center rounded-xl text-zinc-500 hover:bg-zinc-200"
-                  aria-label="Add"
-                >
+                <button className="grid h-10 w-10 place-items-center rounded-xl text-zinc-500 hover:bg-zinc-200">
                   <FaPlus />
                 </button>
 
@@ -457,7 +464,6 @@ export default function Messages({ user }) {
                 />
 
                 <button
-                  type="button"
                   onClick={sendMessage}
                   className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500 text-zinc-900 hover:shadow-lg hover:shadow-emerald-500/20 transition"
                   aria-label="Send"
@@ -474,58 +480,54 @@ export default function Messages({ user }) {
             </div>
           </section>
 
-          {/* RIGHT: details pane (placeholder until your backend links item data to conversations) */}
-            {/* RIGHT: details pane */}
-<aside className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col h-full">
-  {/* Scrollable content INSIDE the aside */}
-  <div className="flex-1 overflow-y-auto">
-    <div className="border-b border-zinc-100 p-4">
-      <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-        Item Details
-      </div>
+          {/* RIGHT: details pane */}
+          <aside className="h-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
+            <div className="border-b border-zinc-100 p-4">
+              <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                Item Details
+              </div>
 
-      <div className="mt-4 overflow-hidden rounded-2xl ring-1 ring-zinc-200">
-        <div className="relative h-40 w-full bg-zinc-200">
-          <img
-            alt="Item"
-            className="h-full w-full object-cover"
-            src={
-              activeItem?.images?.[0] ||
-              activeItem?.image ||
-              "https://placehold.co/900x600?text=Item+Preview"
-            }
-            onError={(e) => {
-              e.currentTarget.src = "https://placehold.co/900x600?text=No+Image";
-            }}
-          />
-          <div className="absolute right-2 top-2 rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-900">
-            EXCHANGE
-          </div>
-        </div>
+              <div className="mt-4 overflow-hidden rounded-2xl ring-1 ring-zinc-200">
+                <div className="relative h-40 w-full bg-zinc-200">
+                  <img
+                    alt="Item"
+                    className="h-full w-full object-cover"
+                    src={
+                      (activeItem?.images && activeItem.images.length > 0
+                        ? activeItem.images[0]
+                        : activeItem?.image) ||
+                      "https://placehold.co/900x600?text=Item+Preview"
+                    }
+                    onError={(e) => {
+                      e.currentTarget.src =
+                        "https://placehold.co/900x600?text=No+Image";
+                    }}
+                  />
+                  <div className="absolute right-2 top-2 rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-900">
+                    EXCHANGE
+                  </div>
+                </div>
 
-        <div className="p-3">
-          <div className="font-bold text-zinc-900">
-            {activeItem?.title || "Item title"}
-          </div>
+                <div className="p-3">
+                  <div className="font-bold text-zinc-900">
+                    {loadingItem
+                      ? "Loading item…"
+                      : activeItem?.title || activeItem?.name || "Item title"}
+                  </div>
+                  <div className="mt-1 line-clamp-2 text-xs text-zinc-500">
+                    {activeItem?.description ||
+                      "Item details will appear here once linked to a listing."}
+                  </div>
 
-          <div className="mt-1 line-clamp-2 text-xs text-zinc-500">
-            {activeItem?.description ||
-              "Item details will appear here once linked to a listing."}
-          </div>
+                  <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-700">
+                    <FaMapMarkerAlt className="text-emerald-600" />
+                    {activeItem?.hubLocation || "Location"}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-          <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 text-xs font-medium text-zinc-700">
-            <FaMapMarkerAlt className="text-emerald-600" />
-            {activeItem?.hubLocation || "Location"}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* You can keep your Exchange Status + Safety blocks here too */}
-    {/* ... */}
-  </div>
-
-            {/* Status (UI only for now) */}
+            {/* Status */}
             <div className="border-b border-zinc-100 p-4">
               <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
                 Exchange Status
@@ -549,7 +551,9 @@ export default function Messages({ user }) {
                     ⏱
                   </div>
                   <div>
-                    <div className="font-bold text-zinc-900">Meet-up Proposed</div>
+                    <div className="font-bold text-zinc-900">
+                      Meet-up Proposed
+                    </div>
                     <div className="text-[11px] text-zinc-500">
                       Waiting for confirmation
                     </div>
@@ -568,7 +572,7 @@ export default function Messages({ user }) {
             </div>
 
             {/* Safety */}
-            <div className="p-4">
+            <div className="p-4 mt-auto">
               <div className="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200">
                 <div className="text-[10px] font-bold uppercase text-amber-700">
                   Safety Tip
