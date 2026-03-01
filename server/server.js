@@ -118,6 +118,7 @@ app.get('/api/items', async (req, res) => {
         const items = await Item.find(query).sort({ createdAt: -1 });
         res.json(items);
     } catch (err) {
+        console.error("❌ CRASH IN GET /api/items:", err); // <-- THIS UNLOCKS THE LOGS
         res.status(500).json({ error: err.message });
     }
 });
