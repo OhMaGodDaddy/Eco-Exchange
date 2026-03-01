@@ -1,174 +1,337 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import { Link } from 'react-router-dom';
+import { FaSearch, FaMapMarkerAlt, FaTag, FaTrash } from 'react-icons/fa';
 
-export default function Home() {
-  // --- 1. STATE ---
+// 1. HARDCODED LISTS
+const LOCATIONS = [
+  "Manila", "Quezon City", "Makati", "Taguig", "Cebu", "Davao", "Pasig", "Other"
+];
+
+const CATEGORIES = [
+  "Electronics", "Furniture", "Clothing", "Books", "Appliances", "Toys", "Tools", "Other"
+];
+
+function Home({ user }) {
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   
-  // States for functionality
-  const [activeCategory, setActiveCategory] = useState('All Items');
-  const [searchQuery, setSearchQuery] = useState('');
+  // Search, Filter & Pagination State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedHub, setSelectedHub] = useState("");
+  
+  // 👇 NEW: Pagination State
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
-  const categories = [
-    { name: 'All Items', icon: 'grid_view' },
-    { name: 'Furniture', icon: 'chair' },
-    { name: 'Clothing', icon: 'checkroom' },
-    { name: 'Electronics', icon: 'devices' },
-    { name: 'Books', icon: 'menu_book' },
-    { name: 'Garden', icon: 'local_florist' },
-  ];
+  // 2. FETCH ITEMS (Now accepts a page number)
+  const fetchItems = async (pageNum = 1) => {
+    setLoading(true);
+    try {
+      // 👇 NEW: Pass the page number to the backend
+      const params = { page: pageNum };
+      if (selectedCategory) params.category = selectedCategory;
+      if (selectedHub) params.hub = selectedHub;
+      
+      const res = await axios.get("https://eco-exchange-api.onrender.com/api/items", {
+        params: params,
+        withCredentials: true
+      });
+      
+      const fetchedItems = res.data;
 
-  // --- 2. DATA FETCHING ---
-  useEffect(() => {
-    const fetchItems = async () => {
-      try {
-        // ⚠️ IMPORTANT: Update this URL to match your actual deployed API URL or relative route!
-        // If your frontend and backend are deployed together, it might just be '/api/items'
-        // If you are using a separate backend on Render/Heroku, paste that full URL here.
-        const response = await fetch('http://localhost:3000/api/items'); 
-        
-        if (!response.ok) throw new Error('Failed to fetch items');
-        const data = await response.json();
-        setItems(data);
-      } catch (error) {
-        console.error("Error fetching items:", error);
-        // For testing purposes right now, let's load some fake data if the fetch fails 
-        // so you can at least test the search and filter functionality!
-        setItems([
-          { _id: '1', name: 'John Cena Armband', category: 'Clothing', location: 'Main Campus', imageUrl: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400' },
-          { _id: '2', name: 'Razer Gaming Mouse', category: 'Electronics', location: 'Main Campus', imageUrl: 'https://images.unsplash.com/photo-1527219525722-f9767a7af8c8?w=400' },
-          { _id: '3', name: 'Black Couch', category: 'Furniture', location: 'Main Campus', imageUrl: 'https://images.unsplash.com/photo-1506898667547-42e22a46e125?w=400' },
-        ]);
-      } finally {
-        setLoading(false);
+      // 👇 NEW: Replace if page 1, append if page 2+
+      if (pageNum === 1) {
+        setItems(fetchedItems);
+      } else {
+        setItems(prevItems => [...prevItems, ...fetchedItems]);
       }
-    };
 
-    fetchItems();
-  }, []);
+      // If the backend returned fewer than 20 items, we hit the end!
+      if (fetchedItems.length < 20) {
+        setHasMore(false);
+      } else {
+        setHasMore(true);
+      }
 
-  // --- 3. FILTERING LOGIC ---
-  // This magically filters your items whenever you type in the search bar OR click a category
-  const filteredItems = items.filter((item) => {
-    const itemName = (item.title || item.name || '').toLowerCase();
-    const matchesSearch = itemName.includes(searchQuery.toLowerCase());
-    
-    const matchesCategory = activeCategory === 'All Items' || item.category === activeCategory;
-    
-    return matchesSearch && matchesCategory;
+    } catch (err) {
+      console.error("Error fetching items:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 👇 NEW: When filters change, reset to Page 1
+  useEffect(() => {
+    setPage(1);
+    fetchItems(1);
+  }, [selectedCategory, selectedHub]);
+
+  // 3. DELETE HANDLER
+  const handleDelete = async (e, itemId) => {
+    e.preventDefault();
+    if (!window.confirm("Are you sure you want to remove this item?")) return;
+
+    try {
+      const response = await axios.delete(`https://eco-exchange-api.onrender.com/api/items/${itemId}`, {
+        withCredentials: true 
+      });
+      if (response.status === 200) {
+        setItems(items.filter(item => item._id !== itemId));
+        alert("Item removed successfully.");
+      }
+    } catch (err) {
+      alert("Error: You might not have permission to delete this.");
+      console.error(err);
+    }
+  };
+
+  // Client-side Text Search
+  const filteredItems = items.filter(item => {
+    const title = item.title || item.name || "";
+    const desc = item.description || "";
+    return title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           desc.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   return (
-    // Added pt-8 to give some breathing room below your global NavBar
-    <div className="min-h-screen bg-background-light font-display pb-20 pt-8">
+    <div style={styles.container}>
       
-      {/* Main Layout Area */}
-      <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row gap-8">
+      {/* --- HERO SECTION --- */}
+      <div style={styles.hero}>
+        <h1 style={styles.heroTitle}>Exchange Hub</h1>
+        <p style={styles.heroSubtitle}>Discover sustainable treasures in your community.</p>
+
+        {/* Search Bar */}
+        <div style={styles.searchContainer}>
+            <div className="tour-search-bar" style={styles.searchWrapper}>
+                <FaSearch style={styles.searchIcon} />
+                <input 
+                    type="text" 
+                    placeholder="Search for lamps, chairs, plants..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={styles.searchInput}
+                />
+            </div>
+        </div>
+
+        {/* Filter Bar */}
+        <div style={styles.filterBar}>
+            {/* Category */}
+            <div style={styles.selectWrapper}>
+                <FaTag style={styles.selectIcon} />
+                <select 
+                    value={selectedCategory} 
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    style={styles.select}
+                >
+                    <option value="" style={{ color: 'black' }}>All Categories</option>
+                    {CATEGORIES.map(cat => (
+                        <option key={cat} value={cat} style={{ color: 'black' }}>{cat}</option>
+                    ))}
+                </select>
+                <div style={styles.dropdownArrow}>▼</div>
+            </div>
+
+            {/* Location */}
+            <div style={styles.selectWrapper}>
+                <FaMapMarkerAlt style={styles.selectIcon} />
+                <select 
+                    value={selectedHub} 
+                    onChange={(e) => setSelectedHub(e.target.value)}
+                    style={styles.select}
+                >
+                    <option value="" style={{ color: 'black' }}>All Locations</option>
+                    {LOCATIONS.map(loc => (
+                        <option key={loc} value={loc} style={{ color: 'black' }}>{loc}</option>
+                    ))}
+                </select>
+                <div style={styles.dropdownArrow}>▼</div>
+            </div>
+
+            {/* Clear Button */}
+            {(selectedCategory || selectedHub) && (
+                <button 
+                    onClick={() => { setSelectedCategory(""); setSelectedHub(""); }}
+                    style={styles.clearBtn}
+                >
+                    Clear Filters
+                </button>
+            )}
+        </div>
+      </div>
+
+      {/* --- LISTINGS GRID --- */}
+      <div style={styles.listingsSection}>
+        <h2 style={styles.sectionTitle}>
+            {selectedCategory || selectedHub ? 'Filtered Results' : 'Fresh Listings'}
+        </h2>
         
-        {/* Left Sidebar */}
-        <aside className="w-full md:w-56 flex-shrink-0 flex flex-col gap-8">
-          
-          {/* Categories */}
-          <div>
-            <h3 className="text-xs font-bold text-gray-400 mb-3 tracking-wider">CATEGORIES</h3>
-            <ul className="space-y-1">
-              {categories.map((cat) => (
-                <li key={cat.name}>
-                  <button 
-                    onClick={() => setActiveCategory(cat.name)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activeCategory === cat.name 
-                        ? 'bg-primary text-white' 
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[20px]">{cat.icon}</span>
-                    {cat.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+        {loading && page === 1 ? (
+           <p style={{textAlign: 'center', marginTop: '40px', color: '#666'}}>Loading items...</p>
+        ) : filteredItems.length === 0 ? (
+           <div style={styles.emptyState}>
+              <p>No items found matching your criteria.</p>
+              <button onClick={() => {setSearchTerm(""); setSelectedCategory(""); setSelectedHub("")}} style={styles.resetBtn}>
+                 Reset All Filters
+              </button>
+           </div>
+        ) : (
+          <>
+              <div style={styles.grid}>
+                {filteredItems.map(item => {
+                    const displayImage = item.images && item.images.length > 0 
+                        ? item.images[0] 
+                        : (item.image || "https://placehold.co/400x300?text=No+Image");
 
-          {/* Map Button */}
-          <button className="hidden md:flex bg-green-50 rounded-xl p-6 flex-col items-center justify-center text-green-800 hover:bg-green-100 transition-colors">
-            <span className="material-symbols-outlined text-3xl mb-2 text-primary">location_on</span>
-            <span className="text-xs font-bold tracking-wider">OPEN MAP</span>
-          </button>
-        </aside>
+                    const canDelete = user && (user.role === 'admin' || user.googleId === item.googleId);
 
-        {/* Main Content Area */}
-        <main className="flex-1">
-          
-          {/* Header & Functional Search Bar Row */}
-          <div className="flex flex-col md:flex-row md:justify-between md:items-end mb-8 gap-4">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Discover Near You</h2>
-              <p className="text-gray-500 text-sm mt-1">Showing {filteredItems.length} eco-friendly finds</p>
-            </div>
-            
-            {/* Functional Search Bar */}
-            <div className="relative w-full md:w-72">
-              <span className="material-symbols-outlined absolute left-3 top-2.5 text-gray-400">search</span>
-              <input 
-                type="text" 
-                placeholder="Search items..." 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white border border-gray-200 text-gray-900 placeholder-gray-400 rounded-full py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all shadow-sm"
-              />
-            </div>
-          </div>
+                    return (
+                      <Link to={`/item/${item._id}`} key={item._id} style={styles.cardLink}>
+                        <div style={styles.card}>
+                          <div style={styles.imageWrapper}>
+                            <img 
+                              src={displayImage}
+                              alt={item.title} 
+                              style={styles.cardImage}
+                              onError={(e) => { e.target.src = "https://placehold.co/400x300?text=Error"; }} 
+                            />
+                          </div>
+                          
+                          <div style={styles.cardContent}>
+                            <h3 style={styles.cardTitle}>{item.title || item.name}</h3>
+                            
+                            <div style={styles.cardMeta}>
+                                <span>📍 {item.hubLocation || "Unknown"}</span>
+                                <span>🏷️ {item.category || "General"}</span>
+                            </div>
 
-          {/* Loading State */}
-          {loading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          ) : filteredItems.length === 0 ? (
-             <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-                <span className="material-symbols-outlined text-4xl mb-2 text-gray-300">search_off</span>
-                <p>No items found for "{searchQuery}" in {activeCategory}.</p>
-             </div>
-          ) : (
-            /* Grid mapping over your FILTERED data */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredItems.map((item) => (
-                <div key={item._id || item.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow relative">
-                  
-                  {/* Image & Category Badge */}
-                  <div className="h-48 relative overflow-hidden bg-gray-100">
-                    <img 
-                      src={item.image || item.imageUrl || 'https://via.placeholder.com/400'} 
-                      alt={item.title || item.name} 
-                      className="w-full h-full object-cover" 
-                    />
-                    <div className="absolute bottom-3 left-3 bg-primary text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm">
-                      {item.category || 'Item'}
-                    </div>
+                            {canDelete && (
+                                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #eee', textAlign: 'right' }}>
+                                    <button 
+                                        onClick={(e) => handleDelete(e, item._id)}
+                                        style={styles.deleteBtn}
+                                    >
+                                        <FaTrash style={{ marginRight: '5px' }} /> Delete
+                                    </button>
+                                </div>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                })}
+              </div>
+
+              {/* 👇 NEW: Load More Button */}
+              {hasMore && (
+                  <div style={styles.loadMoreContainer}>
+                      <button 
+                          onClick={() => {
+                              const nextPage = page + 1;
+                              setPage(nextPage);
+                              fetchItems(nextPage);
+                          }}
+                          style={styles.loadMoreBtn}
+                          disabled={loading}
+                      >
+                          {loading ? "Loading..." : "Load More Items"}
+                      </button>
                   </div>
-
-                  {/* Card Info */}
-                  <div className="p-4">
-                    <h3 className="font-bold text-gray-900 text-base mb-2 line-clamp-1">
-                      {item.title || item.name}
-                    </h3>
-                    
-                    <div className="flex items-center justify-between pt-3 border-t border-gray-50">
-                      <div className="flex items-center gap-1 text-gray-500">
-                        <span className="material-symbols-outlined text-[16px]">location_on</span>
-                        <span className="text-xs font-medium">{item.location || 'Main Campus'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              ))}
-            </div>
-          )}
-
-        </main>
+              )}
+          </>
+        )}
       </div>
     </div>
   );
 }
+
+// --- STYLES ---
+const styles = {
+  container: { minHeight: '100vh', backgroundColor: '#f4f6f8', paddingBottom: '50px' },
+  hero: { 
+    backgroundColor: '#1B4332', 
+    color: 'white', 
+    padding: '60px 20px 80px', 
+    textAlign: 'center',
+    boxShadow: '0 4px 10px rgba(0,0,0,0.1)' 
+  },
+  heroTitle: { fontSize: '3rem', margin: '0 0 10px', fontWeight: '800' },
+  heroSubtitle: { fontSize: '1.1rem', opacity: 0.9, marginBottom: '30px' },
+  
+  searchContainer: { display: 'flex', justifyContent: 'center', marginBottom: '20px' },
+  searchWrapper: { 
+    position: 'relative', width: '100%', maxWidth: '600px', display: 'flex', alignItems: 'center' 
+  },
+  searchIcon: { position: 'absolute', left: '20px', color: '#1B4332', fontSize: '1.2rem', zIndex: 1 },
+  searchInput: { 
+    width: '100%', padding: '16px 20px 16px 50px', borderRadius: '50px', border: 'none', 
+    fontSize: '1rem', outline: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.2)' 
+  },
+
+  filterBar: { 
+    display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', marginTop: '10px' 
+  },
+  selectWrapper: {
+    position: 'relative', display: 'flex', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.2)',
+    backdropFilter: 'blur(10px)', borderRadius: '30px', padding: '0 15px', border: '1px solid rgba(255,255,255,0.3)'
+  },
+  selectIcon: { color: 'white', marginRight: '8px', fontSize: '0.9rem' },
+  select: {
+    appearance: 'none', backgroundColor: 'transparent', border: 'none', color: 'white',
+    padding: '12px 25px 12px 5px', fontSize: '0.95rem', cursor: 'pointer', outline: 'none', fontWeight: '500'
+  },
+  dropdownArrow: {
+    position: 'absolute', right: '15px', color: 'rgba(255,255,255,0.7)', fontSize: '0.7rem', pointerEvents: 'none'
+  },
+  clearBtn: {
+    backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.5)', color: 'white',
+    padding: '8px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '0.85rem'
+  },
+
+  listingsSection: { 
+    maxWidth: '1200px', 
+    margin: '30px auto', 
+    padding: '0 20px' 
+  },
+  sectionTitle: { fontSize: '1.8rem', fontWeight: 'bold', marginBottom: '25px', color: '#2D3748' },
+  
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '25px' },
+  
+  cardLink: { textDecoration: 'none', color: 'inherit' },
+  card: { 
+    backgroundColor: 'white', borderRadius: '16px', overflow: 'hidden', 
+    boxShadow: '0 2px 8px rgba(0,0,0,0.06)', transition: 'transform 0.2s, box-shadow 0.2s',
+    display: 'flex', flexDirection: 'column', height: '100%'
+  },
+  imageWrapper: { position: 'relative', height: '200px', backgroundColor: '#eee' },
+  cardImage: { width: '100%', height: '100%', objectFit: 'cover' },
+  
+  cardContent: { padding: '15px', display: 'flex', flexDirection: 'column', flexGrow: 1 },
+  cardTitle: { fontSize: '1.1rem', fontWeight: '700', marginBottom: '8px', color: '#2d3748', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  cardMeta: { display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#718096', marginBottom: 'auto' }, 
+  
+  deleteBtn: {
+    backgroundColor: '#fff5f5', color: '#e53e3e', border: '1px solid #fed7d7',
+    borderRadius: '8px', padding: '6px 12px', fontSize: '0.8rem', fontWeight: 'bold',
+    cursor: 'pointer', display: 'inline-flex', alignItems: 'center'
+  },
+  
+  emptyState: { textAlign: 'center', padding: '60px', color: '#666' },
+  resetBtn: {
+      marginTop: '15px', backgroundColor: '#1B4332', color: 'white', border: 'none',
+      padding: '10px 20px', borderRadius: '8px', cursor: 'pointer'
+  },
+
+  // 👇 NEW: Styles for the Load More section
+  loadMoreContainer: { display: 'flex', justifyContent: 'center', margin: '40px 0' },
+  loadMoreBtn: {
+      backgroundColor: '#1B4332', color: 'white', border: 'none', padding: '12px 30px',
+      borderRadius: '8px', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold',
+      transition: 'background-color 0.2s'
+  }
+};
+
+export default Home;
