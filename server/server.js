@@ -116,9 +116,12 @@ app.get('/api/items', async (req, res) => {
         if (hub) query.hubLocation = hub;
         if (category) query.category = category;
         
-        // 👇 Notice the .allowDiskUse(true) added right at the end!
-        const items = await Item.find(query).sort({ createdAt: -1 }).allowDiskUse(true);
-        
+        // 👇 Notice the .select('-embedding') we added!
+        const items = await Item.find(query)
+            .select('-embedding') // This strips out the massive AI math array
+            .sort({ createdAt: -1 })
+            .allowDiskUse(true);
+            
         res.json(items);
     } catch (err) {
         console.error("❌ CRASH IN GET /api/items:", err);
