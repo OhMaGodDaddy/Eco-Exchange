@@ -343,39 +343,56 @@ app.get("/api/messages/conversations", async (req, res) => {
   const myId = String(req.user._id);
 
   try {
-    const allMessages = await Message.find({
-      $or: [{ senderId: myId }, { receiverId: myId }],
-    })
-      .sort({ timestamp: -1, _id: -1 })
-      .lean();
+    // Better approach: aggregation to get the latest message per conversationKey
+    const pipeline = [
+      {
+        $match: {
+          $or: [{ senderId: myId }, { receiverId: myId }],
+        },
+      },
+      { $sort: { timestamp: -1, _id: -1 } },
+      {
+        $group: {
+          _id: "$conversationKey",
+          doc: { $first: "$ROOT" },
+        },
+      },
+      { $replaceRoot: { newRoot: "$doc" } },
+      { $sort: { timestamp: -1 } },
+      { $limit: 100 },
+    ];
 
-    const map = new Map();
+    const results = await Message.aggregate(pipeline).allowDiskUse(true);
 
-    for (const msg of allMessages) {
-      const key =
-        msg.conversationKey ||
-        makeConversationKey(msg.senderId, msg.receiverId, msg.itemId);
-
-      if (map.has(key)) continue;
-
+    // For each conversation, determine the other user's id and fetch their name
+    const conversations = [];
+    for (const msg of results) {
+      const key = msg.conversationKey || makeConversationKey(msg.senderId, msg.receiverId, msg.itemId);
       const otherUserId = msg.senderId === myId ? msg.receiverId : msg.senderId;
 
-      map.set(key, {
-        debugVersion: "conversations-v3",
+      let otherUserName = msg.senderId !== myId ? msg.senderName : null;
+      if (!otherUserName) {
+        try {
+          const userDoc = await User.findById(otherUserId).select('displayName').lean();
+          otherUserName = userDoc ? userDoc.displayName : 'Chat User';
+        } catch (e) {
+          otherUserName = 'Chat User';
+        }
+      }
+
+      conversations.push({
+        debugVersion: 'conversations-v4',
         conversationKey: key,
-        conversationId: key, // your frontend uses this
+        conversationId: key,
         friendId: otherUserId,
         itemId: msg.itemId || null,
-        otherUser: {
-          _id: otherUserId,
-          username: msg.senderId !== myId ? msg.senderName : "Chat User",
-        },
+        otherUser: { _id: otherUserId, username: otherUserName },
         lastMessage: msg.text,
         timestamp: getMsgTime(msg),
       });
     }
 
-    res.json(Array.from(map.values()));
+    res.json(conversations);
   } catch (error) {
     console.error("GET /api/messages/conversations error:", error);
     res.status(500).json({ error: "Server error" });
