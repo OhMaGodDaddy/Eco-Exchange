@@ -34,7 +34,8 @@ function getInitial(name = "?") {
 
 // ✅ local helper to build a unique thread key
 function makeThreadKey(friendId, itemId) {
-  return `${String(friendId || "unknown")}__${String(itemId || "general")}`;
+  // match server `makeConversationKey` format (single underscore)
+  return `${String(friendId || "unknown")}_${String(itemId || "general")}`;
 }
 
 export default function Inbox({ user }) {
@@ -157,21 +158,17 @@ export default function Inbox({ user }) {
       setLoadingMsgs(true);
 
       try {
-        // item thread
-        if (activeThread.itemId) {
-          const res = await axios.get(`${API_BASE}/api/messages/thread`, {
-            params: { friendId: activeThread.friendId, itemId: activeThread.itemId },
-            withCredentials: true,
-          });
-          setMessages(res.data || []);
-        } else {
-          // legacy/general chat thread
-          const res = await axios.get(
-            `${API_BASE}/api/messages/${activeThread.friendId}`,
-            { withCredentials: true }
-          );
-          setMessages(res.data || []);
-        }
+        // Always fetch via the query-based thread endpoint which computes
+        // the conversationKey server-side. This ensures item-specific threads
+        // are returned even when itemId is present or missing.
+        const params = { friendId: activeThread.friendId };
+        if (activeThread.itemId) params.itemId = activeThread.itemId;
+
+        const res = await axios.get(`${API_BASE}/api/messages/thread`, {
+          params,
+          withCredentials: true,
+        });
+        setMessages(res.data || []);
       } catch (err) {
         console.error(err);
         setMessages([]);
