@@ -164,8 +164,21 @@ app.get("/api/logout", (req, res, next) => {
 // --- API ROUTES (Items) ---
 app.get("/api/items", async (req, res) => {
   try {
-    const { hub, category, page = 1 } = req.query;
-    let query = { status: "Available" };
+    // Log incoming query for debugging on deployed environments
+    console.log("/api/items called with query:", req.query);
+
+    // Defensive parsing: coerce and validate query params
+    const hub = req.query && typeof req.query.hub === "string" ? req.query.hub : undefined;
+    let category = req.query && typeof req.query.category === "string" ? req.query.category : undefined;
+    if (category && category.trim().length === 0) category = undefined;
+    // normalize display labels like "All Items"
+    if (category && category.toLowerCase().includes("all")) category = undefined;
+
+    const rawPage = req.query && req.query.page !== undefined ? String(req.query.page) : "1";
+    const pageNum = Number.parseInt(rawPage, 10);
+    const page = Number.isFinite(pageNum) && pageNum > 0 ? pageNum : 1;
+
+    const query = { status: "Available" };
     if (hub) query.hubLocation = hub;
     if (category) query.category = category;
 
@@ -176,12 +189,24 @@ app.get("/api/items", async (req, res) => {
       .select("-embedding")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
+
+    // Compatibility fallback: return items even if status not set on old records
+    if ((!items || items.length === 0) && page === 1) {
+      const fallback = await Item.find(hub || category ? query : {})
+        .select("-embedding")
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
+      return res.json(fallback);
+    }
 
     res.json(items);
   } catch (err) {
-    console.error("❌ CRASH IN GET /api/items:", err);
-    res.status(500).json({ error: err.message });
+    console.error("❌ CRASH IN GET /api/items:", err && err.stack ? err.stack : err);
+    // Include original query in error response for remote debugging (non-sensitive)
+    res.status(500).json({ error: err.message || "Server error", query: req.query });
   }
 });
 
