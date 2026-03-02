@@ -350,16 +350,29 @@ app.get("/api/messages/conversations", async (req, res) => {
           $or: [{ senderId: myId }, { receiverId: myId }],
         },
       },
+      // compute a deterministic conversation key for legacy messages missing the field
+      {
+        $addFields: {
+          computedConversationKey: {
+            $let: {
+              vars: {
+                firstId: { $cond: [{ $lt: ["$senderId", "$receiverId"] }, "$senderId", "$receiverId"] },
+                secondId: { $cond: [{ $lt: ["$senderId", "$receiverId"] }, "$receiverId", "$senderId"] },
+                itemPart: { $ifNull: ["$itemId", "general"] },
+              },
+              in: { $concat: ["$$firstId", "_", "$$secondId", "_", "$$itemPart"] },
+            },
+          },
+        },
+      },
       { $sort: { timestamp: -1, _id: -1 } },
       {
         $group: {
-          _id: "$conversationKey",
-          // use the aggregation variable $$ROOT to capture the full document
+          // prefer the explicit conversationKey field, otherwise use the computed value
+          _id: { $ifNull: ["$conversationKey", "$computedConversationKey"] },
           doc: { $first: "$$ROOT" },
         },
       },
-      // replaceRoot expects an object; guard by using the doc field which
-      // will now be the full document (not null) when $$ROOT exists
       { $replaceRoot: { newRoot: "$doc" } },
       { $sort: { timestamp: -1 } },
       { $limit: 100 },
