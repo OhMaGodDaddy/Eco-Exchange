@@ -92,21 +92,20 @@ export default function Home({ user }) {
       if (selectedCategory) params.category = selectedCategory;
       if (selectedHub) params.hub = selectedHub;
 
-      const res = await axios.get(`${API_BASE}/api/items`, {
-        params,
-        withCredentials: true,
-      });
+      const requestItems = async (requestParams) => {
+        const response = await axios.get(`${API_BASE}/api/items`, {
+          params: requestParams,
+          withCredentials: true,
+        });
+        return normalizeItems(response.data);
+      };
 
-      const fetched = normalizeItems(res.data);
+      let fetched = await requestItems(params);
 
       // Fallback: some deployments return empty when category is "All Items" with page query.
       // Retry without pagination so "All Items" still renders listings.
       if (pageNum === 1 && !selectedCategory && fetched.length === 0) {
-        const fallbackRes = await axios.get(`${API_BASE}/api/items`, {
-          params: selectedHub ? { hub: selectedHub } : undefined,
-          withCredentials: true,
-        });
-        const fallbackItems = normalizeItems(fallbackRes.data);
+        const fallbackItems = await requestItems(selectedHub ? { hub: selectedHub } : undefined);
         setItems(fallbackItems);
         setHasMore(fallbackItems.length >= 20);
         return;
@@ -118,6 +117,23 @@ export default function Home({ user }) {
       // if backend page size is 20 like your code expects:
       setHasMore(fetched.length >= 20);
     } catch (err) {
+      // Recovery path: for initial "All Items" load, retry without page/filter params
+      // to avoid showing an empty dashboard when API rejects paginated query formats.
+      if (pageNum === 1 && !selectedCategory) {
+        try {
+          const recoveryRes = await axios.get(`${API_BASE}/api/items`, {
+            params: selectedHub ? { hub: selectedHub } : undefined,
+            withCredentials: true,
+          });
+          const recovered = normalizeItems(recoveryRes.data);
+          setItems(recovered);
+          setHasMore(recovered.length >= 20);
+          return;
+        } catch (recoveryErr) {
+          console.error("Recovery fetch failed:", recoveryErr);
+        }
+      }
+
       console.error("Error fetching items:", err);
       // keep current items, just stop load more
       if (pageNum === 1) setItems([]);
