@@ -42,6 +42,14 @@ function safeText(s) {
   return (s ?? "").toString();
 }
 
+function normalizeItems(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
 function sameCategory(itemCategory, selectedCategory) {
   if (!selectedCategory) return true;
   return safeText(itemCategory).trim().toLowerCase() === selectedCategory.trim().toLowerCase();
@@ -89,7 +97,7 @@ export default function Home({ user }) {
         withCredentials: true,
       });
 
-      const fetched = Array.isArray(res.data) ? res.data : [];
+      const fetched = normalizeItems(res.data);
 
       // Fallback: some deployments return empty when category is "All Items" with page query.
       // Retry without pagination so "All Items" still renders listings.
@@ -98,7 +106,7 @@ export default function Home({ user }) {
           params: selectedHub ? { hub: selectedHub } : undefined,
           withCredentials: true,
         });
-        const fallbackItems = Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
+        const fallbackItems = normalizeItems(fallbackRes.data);
         setItems(fallbackItems);
         setHasMore(fallbackItems.length >= 20);
         return;
