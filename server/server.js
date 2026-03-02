@@ -106,7 +106,19 @@ app.use(passport.session());
 if (MONGO_URI) {
   mongoose
     .connect(MONGO_URI)
-    .then(() => console.log("✅ MongoDB Connected Successfully"))
+    .then(async () => {
+      console.log("✅ MongoDB Connected Successfully");
+      try {
+        // Ensure indexes to avoid large in-memory sorts on `createdAt`
+        await Item.collection.createIndex({ createdAt: -1 });
+        await Item.collection.createIndex({ status: 1 });
+        await Item.collection.createIndex({ hubLocation: 1 });
+        await Item.collection.createIndex({ category: 1 });
+        console.log("✅ Ensured indexes on items collection");
+      } catch (ixErr) {
+        console.warn("⚠️ Failed to create indexes on items collection:", ixErr && ixErr.message ? ixErr.message : ixErr);
+      }
+    })
     .catch((err) => console.log("❌ MongoDB Connection Error:", err));
 } else {
   console.warn("❌ Skipping MongoDB connection: MONGO_URI not set (production requires a valid MONGO_URI).");
@@ -185,20 +197,37 @@ app.get("/api/items", async (req, res) => {
     const limit = 20;
     const skip = (page - 1) * limit;
 
-    const items = await Item.find(query)
-      .select("-embedding")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean();
+    // Use aggregation with allowDiskUse to opt-in to external sorting when needed
+    const match = {};
+    if (hub) match.hubLocation = hub;
+    if (category) match.category = category;
+    // Primary: show only Available items
+    match.status = "Available";
 
-    // Compatibility fallback: return items even if status not set on old records
+    const pipeline = [
+      { $match: match },
+      { $sort: { createdAt: -1 } },
+      { $project: { embedding: 0 } },
+      { $skip: skip },
+      { $limit: limit },
+    ];
+
+    let items = await Item.aggregate(pipeline).allowDiskUse(true);
+
+    // Compatibility fallback: old records may not have `status` set
     if ((!items || items.length === 0) && page === 1) {
-      const fallback = await Item.find(hub || category ? query : {})
-        .select("-embedding")
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .lean();
+      const fallbackMatch = {};
+      if (hub) fallbackMatch.hubLocation = hub;
+      if (category) fallbackMatch.category = category;
+
+      const fallbackPipeline = [
+        { $match: fallbackMatch },
+        { $sort: { createdAt: -1 } },
+        { $project: { embedding: 0 } },
+        { $limit: limit },
+      ];
+
+      const fallback = await Item.aggregate(fallbackPipeline).allowDiskUse(true);
       return res.json(fallback);
     }
 
