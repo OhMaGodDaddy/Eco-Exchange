@@ -354,9 +354,12 @@ app.get("/api/messages/conversations", async (req, res) => {
       {
         $group: {
           _id: "$conversationKey",
-          doc: { $first: "$ROOT" },
+          // use the aggregation variable $$ROOT to capture the full document
+          doc: { $first: "$$ROOT" },
         },
       },
+      // replaceRoot expects an object; guard by using the doc field which
+      // will now be the full document (not null) when $$ROOT exists
       { $replaceRoot: { newRoot: "$doc" } },
       { $sort: { timestamp: -1 } },
       { $limit: 100 },
