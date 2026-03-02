@@ -356,9 +356,12 @@ app.get("/api/messages/conversations", async (req, res) => {
           computedConversationKey: {
             $let: {
               vars: {
-                firstId: { $cond: [{ $lt: ["$senderId", "$receiverId"] }, "$senderId", "$receiverId"] },
-                secondId: { $cond: [{ $lt: ["$senderId", "$receiverId"] }, "$receiverId", "$senderId"] },
-                itemPart: { $ifNull: ["$itemId", "general"] },
+                // convert IDs to strings to avoid $concat ObjectId errors
+                senderStr: { $toString: "$senderId" },
+                receiverStr: { $toString: "$receiverId" },
+                firstId: { $cond: [{ $lt: [{ $toString: "$senderId" }, { $toString: "$receiverId" }] }, { $toString: "$senderId" }, { $toString: "$receiverId" }] },
+                secondId: { $cond: [{ $lt: [{ $toString: "$senderId" }, { $toString: "$receiverId" }] }, { $toString: "$receiverId" }, { $toString: "$senderId" }] },
+                itemPart: { $ifNull: [{ $toString: "$itemId" }, "general"] },
               },
               in: { $concat: ["$$firstId", "_", "$$secondId", "_", "$$itemPart"] },
             },
