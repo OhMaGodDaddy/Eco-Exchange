@@ -42,6 +42,11 @@ function safeText(s) {
   return (s ?? "").toString();
 }
 
+function sameCategory(itemCategory, selectedCategory) {
+  if (!selectedCategory) return true;
+  return safeText(itemCategory).trim().toLowerCase() === selectedCategory.trim().toLowerCase();
+}
+
 export default function Home({ user }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -84,7 +89,20 @@ export default function Home({ user }) {
         withCredentials: true,
       });
 
-      const fetched = res.data || [];
+      const fetched = Array.isArray(res.data) ? res.data : [];
+
+      // Fallback: some deployments return empty when category is "All Items" with page query.
+      // Retry without pagination so "All Items" still renders listings.
+      if (pageNum === 1 && !selectedCategory && fetched.length === 0) {
+        const fallbackRes = await axios.get(`${API_BASE}/api/items`, {
+          params: selectedHub ? { hub: selectedHub } : undefined,
+          withCredentials: true,
+        });
+        const fallbackItems = Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
+        setItems(fallbackItems);
+        setHasMore(fallbackItems.length >= 20);
+        return;
+      }
 
       if (pageNum === 1) setItems(fetched);
       else setItems((prev) => [...prev, ...fetched]);
@@ -133,7 +151,11 @@ export default function Home({ user }) {
   const filteredItems = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
 
-    const searched = items.filter((item) => {
+    const categoryFiltered = items.filter((item) =>
+      sameCategory(item.category, selectedCategory)
+    );
+
+    const searched = categoryFiltered.filter((item) => {
       const title = safeText(item.title || item.name).toLowerCase();
       const desc = safeText(item.description).toLowerCase();
       const hub = safeText(item.hubLocation).toLowerCase();
@@ -169,7 +191,7 @@ export default function Home({ user }) {
     });
 
     return sorted;
-  }, [items, searchTerm, sortBy]);
+  }, [items, searchTerm, selectedCategory, sortBy]);
 
   const activeCategoryLabel =
     CATEGORIES.find((c) => c.key === selectedCategory)?.label || "All Items";
