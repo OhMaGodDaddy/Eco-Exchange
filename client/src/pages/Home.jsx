@@ -88,7 +88,11 @@ export default function Home({ user }) {
   const fetchItems = async (pageNum = 1) => {
     setLoading(true);
     try {
-      const params = { page: pageNum };
+      // Only include `page` when requesting pages beyond the first or when
+      // a category filter is active. Some deployments return 500 for
+      // `page=1` on the "all items" route, so avoid sending it.
+      const params = {};
+      if (pageNum > 1 || selectedCategory) params.page = pageNum;
       if (selectedCategory) params.category = selectedCategory;
       if (selectedHub) params.hub = selectedHub;
 

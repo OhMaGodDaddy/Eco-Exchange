@@ -165,34 +165,18 @@ app.get("/api/logout", (req, res, next) => {
 app.get("/api/items", async (req, res) => {
   try {
     const { hub, category, page = 1 } = req.query;
-    const pageNum = Number.parseInt(page, 10);
-    const safePage = Number.isFinite(pageNum) && pageNum > 0 ? pageNum : 1;
+    let query = { status: "Available" };
+    if (hub) query.hubLocation = hub;
+    if (category) query.category = category;
 
     const limit = 20;
-    const skip = (safePage - 1) * limit;
+    const skip = (page - 1) * limit;
 
-    const baseQuery = {};
-    if (hub) baseQuery.hubLocation = hub;
-    if (category) baseQuery.category = category;
-
-    // Primary query: current app behavior, only show available items.
-    let items = await Item.find({ ...baseQuery, status: "Available" })
+    const items = await Item.find(query)
       .select("-embedding")
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit)
-      .lean();
-
-    // Compatibility fallback: old records may not have a status set.
-    // If filtering by "Available" returns nothing on page 1, retry without status constraint.
-    if (items.length === 0 && safePage === 1) {
-      items = await Item.find(baseQuery)
-        .select("-embedding")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean();
-    }
+      .limit(limit);
 
     res.json(items);
   } catch (err) {
