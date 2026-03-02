@@ -549,3 +549,27 @@ app.delete("/api/items/:id", async (req, res) => {
     res.status(500).json({ error: err.message || "Server error" });
   }
 });
+
+// New: Fetch messages for a (friendId + itemId) thread using query params
+app.get("/api/messages/thread", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+
+  try {
+    const myId = String(req.user._id);
+    const friendId = req.query && req.query.friendId ? String(req.query.friendId) : null;
+    const itemId = req.query && req.query.itemId ? String(req.query.itemId) : null;
+
+    if (!friendId) return res.status(400).json({ message: "friendId is required" });
+
+    const conversationKey = makeConversationKey(myId, friendId, itemId);
+
+    const messages = await Message.find({ conversationKey })
+      .sort({ timestamp: 1, _id: 1 })
+      .lean();
+
+    res.json(messages);
+  } catch (err) {
+    console.error("GET /api/messages/thread (query) error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
