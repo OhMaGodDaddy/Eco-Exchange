@@ -521,3 +521,31 @@ Keep it to 2-3 sentences. Focus on sustainability. No hashtags.`,
 app.listen(PORT, () => {
   console.log(`Server is running on port: ${PORT}`);
 });
+
+// --- DELETE ITEM (authorization aware)
+app.delete("/api/items/:id", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+
+  try {
+    const item = await Item.findById(req.params.id);
+    if (!item) return res.status(404).json({ message: "Item not found" });
+
+    const user = req.user || {};
+    const isAdmin = typeof user.role === "string" && user.role.toLowerCase() === "admin";
+
+    // Owner detection: prefer googleId if present, otherwise compare stored userId to session user _id
+    const ownerByGoogleId = item.googleId && user.googleId && item.googleId === user.googleId;
+    const ownerByUserId = item.userId && user._id && String(item.userId) === String(user._id);
+    const isOwner = ownerByGoogleId || ownerByUserId;
+
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ message: "Not authorized to delete this item" });
+    }
+
+    await item.deleteOne();
+    res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE /api/items/:id error:", err);
+    res.status(500).json({ error: err.message || "Server error" });
+  }
+});
