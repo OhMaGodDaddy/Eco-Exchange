@@ -79,6 +79,49 @@ function makeConversationKey(userAId, userBId, itemId) {
  * ✅ Use your existing Message schema `timestamp`
  * fallback to _id timestamp just in case
  */
+
+function asStringId(value) {
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
+function isLikelyObjectId(value) {
+  return /^[a-fA-F0-9]{24}$/.test(asStringId(value));
+}
+
+async function resolveUserId(identifier) {
+  const raw = asStringId(identifier).trim();
+  if (!raw) return null;
+
+  let user = null;
+  if (isLikelyObjectId(raw)) {
+    user = await User.findById(raw).select("_id googleId").lean();
+  }
+
+  if (!user) {
+    user = await User.findOne({ googleId: raw }).select("_id googleId").lean();
+  }
+
+  if (!user) return null;
+  return { canonicalId: asStringId(user._id), googleId: asStringId(user.googleId) };
+}
+
+async function rewardItemOwner(item) {
+  const ownerCandidates = [item?.userId, item?.googleId].map(asStringId).filter(Boolean);
+
+  for (const ownerId of ownerCandidates) {
+    if (isLikelyObjectId(ownerId)) {
+      const byId = await User.findByIdAndUpdate(ownerId, { $inc: { successfulTransactionPoints: 1 } }, { new: true }).select("_id").lean();
+      if (byId) return true;
+    }
+
+    const byGoogleId = await User.findOneAndUpdate({ googleId: ownerId }, { $inc: { successfulTransactionPoints: 1 } }, { new: true }).select("_id").lean();
+    if (byGoogleId) return true;
+  }
+
+  return false;
+}
+
 function getMsgTime(msg) {
   return msg.timestamp || (msg._id ? msg._id.getTimestamp() : new Date(0));
 }
@@ -727,7 +770,6 @@ app.post("/api/trades/confirm", async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
   try {
     const { conversationKey, itemId, otherUserId } = req.body;
-    const myId = String(req.user._id);
 
     if (!conversationKey || !itemId || !otherUserId) {
       return res.status(400).json({ message: "conversationKey, itemId, and otherUserId are required" });
@@ -736,39 +778,74 @@ app.post("/api/trades/confirm", async (req, res) => {
     const item = await Item.findById(itemId);
     if (!item) return res.status(404).json({ message: "Item not found" });
 
-    const participantIds = [myId, String(otherUserId)].sort();
-    let trade = await TradeConfirmation.findOne({ conversationKey });
+    const me = await resolveUserId(req.user._id);
+    const other = await resolveUserId(otherUserId);
+
+    const myCanonicalId = me?.canonicalId || String(req.user._id);
+    const myLegacyIds = [myCanonicalId, asStringId(req.user.googleId)].filter(Boolean);
+    const otherCanonicalId = other?.canonicalId || String(otherUserId);
+
+    const canonicalConversationKey = makeConversationKey(myCanonicalId, otherCanonicalId, itemId);
+    let trade = await TradeConfirmation.findOne({
+      $or: [{ conversationKey: String(conversationKey) }, { conversationKey: canonicalConversationKey }],
+    });
 
     if (!trade) {
       trade = await TradeConfirmation.create({
-        conversationKey,
+        conversationKey: canonicalConversationKey,
         itemId: String(itemId),
-        participantIds,
-        confirmations: [myId],
+        participantIds: [myCanonicalId, otherCanonicalId].sort(),
+        confirmations: [myCanonicalId],
       });
       return res.json({ message: "Trade confirmation recorded.", trade });
     }
 
-    if (!trade.participantIds.includes(myId)) {
+    const normalizedParticipants = [];
+    for (const pid of trade.participantIds || []) {
+      const resolved = await resolveUserId(pid);
+      normalizedParticipants.push(resolved?.canonicalId || String(pid));
+    }
+    trade.participantIds = [...new Set(normalizedParticipants)].sort();
+
+    const normalizedConfirmations = [];
+    for (const cid of trade.confirmations || []) {
+      const resolved = await resolveUserId(cid);
+      normalizedConfirmations.push(resolved?.canonicalId || String(cid));
+    }
+    trade.confirmations = [...new Set(normalizedConfirmations)];
+
+    const isParticipant = trade.participantIds.includes(myCanonicalId) || (trade.participantIds || []).some((id) => myLegacyIds.includes(String(id)));
+    if (!isParticipant) {
       return res.status(403).json({ message: "You are not part of this trade." });
     }
 
-    if (!trade.confirmations.includes(myId)) {
-      trade.confirmations.push(myId);
+    if (!trade.confirmations.includes(myCanonicalId)) {
+      trade.confirmations.push(myCanonicalId);
     }
 
     if (trade.participantIds.every((id) => trade.confirmations.includes(id))) {
       trade.status = "successful";
       trade.confirmedAt = new Date();
-      item.status = "Exchanged";
-      await item.save();
-      await User.findByIdAndUpdate(item.userId, { $inc: { successfulTransactionPoints: 1 } });
+
+      if (item.status !== "Exchanged") {
+        item.status = "Exchanged";
+        await item.save();
+      }
+
+      const ownerRewarded = await rewardItemOwner(item);
+      if (!ownerRewarded) {
+        console.warn("Trade confirmed but owner reward was not applied for item:", item._id);
+      }
+    }
+
+    if (trade.conversationKey !== canonicalConversationKey) {
+      trade.conversationKey = canonicalConversationKey;
     }
 
     await trade.save();
     res.json({ message: "Trade confirmation updated.", trade });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ message: err.message, error: err.message });
   }
 });
 

@@ -244,7 +244,7 @@ export default function Inbox({ user }) {
         alert('Your confirmation has been recorded. Waiting for the other user.');
       }
     } catch (err) {
-      alert(err?.response?.data?.message || 'Unable to confirm trade.');
+      alert(err?.response?.data?.message || err?.response?.data?.error || 'Unable to confirm trade.');
     }
   };
 
