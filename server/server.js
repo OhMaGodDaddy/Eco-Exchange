@@ -111,15 +111,67 @@ async function rewardItemOwner(item) {
 
   for (const ownerId of ownerCandidates) {
     if (isLikelyObjectId(ownerId)) {
-      const byId = await User.findByIdAndUpdate(ownerId, { $inc: { successfulTransactionPoints: 1 } }, { new: true }).select("_id").lean();
-      if (byId) return true;
+      const byId = await User.findByIdAndUpdate(
+        ownerId,
+        [
+          {
+            $set: {
+              successfulTransactionPoints: { $add: [{ $ifNull: ["$successfulTransactionPoints", 0] }, 1] },
+              trustScore: {
+                $min: [100, { $max: [0, { $add: [{ $ifNull: ["$trustScore", 50] }, 2] }] }],
+              },
+            },
+          },
+        ],
+        { new: true }
+      )
+        .select("_id successfulTransactionPoints trustScore")
+        .lean();
+      if (byId) return byId;
     }
 
-    const byGoogleId = await User.findOneAndUpdate({ googleId: ownerId }, { $inc: { successfulTransactionPoints: 1 } }, { new: true }).select("_id").lean();
-    if (byGoogleId) return true;
+    const byGoogleId = await User.findOneAndUpdate(
+      { googleId: ownerId },
+      [
+        {
+          $set: {
+            successfulTransactionPoints: { $add: [{ $ifNull: ["$successfulTransactionPoints", 0] }, 1] },
+            trustScore: {
+              $min: [100, { $max: [0, { $add: [{ $ifNull: ["$trustScore", 50] }, 2] }] }],
+            },
+          },
+        },
+      ],
+      { new: true }
+    )
+      .select("_id successfulTransactionPoints trustScore")
+      .lean();
+    if (byGoogleId) return byGoogleId;
   }
 
-  return false;
+  return null;
+}
+
+async function adjustUsersTrustScore(userIds, delta) {
+  const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map(asStringId).filter(Boolean))];
+  for (const id of ids) {
+    const update = [
+      {
+        $set: {
+          trustScore: {
+            $min: [100, { $max: [0, { $add: [{ $ifNull: ["$trustScore", 50] }, delta] }] }],
+          },
+        },
+      },
+    ];
+
+    if (isLikelyObjectId(id)) {
+      const updated = await User.findByIdAndUpdate(id, update, { new: true });
+      if (updated) continue;
+    }
+
+    await User.findOneAndUpdate({ googleId: id }, update, { new: true });
+  }
 }
 
 function getMsgTime(msg) {
@@ -836,6 +888,8 @@ app.post("/api/trades/confirm", async (req, res) => {
       if (!ownerRewarded) {
         console.warn("Trade confirmed but owner reward was not applied for item:", item._id);
       }
+
+      await adjustUsersTrustScore(trade.participantIds, 2);
     }
 
     if (trade.conversationKey !== canonicalConversationKey) {
@@ -849,11 +903,64 @@ app.post("/api/trades/confirm", async (req, res) => {
   }
 });
 
+app.post("/api/trades/cancel", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+  try {
+    const { conversationKey, itemId, otherUserId, reason = "cancelled" } = req.body;
+
+    if (!conversationKey || !itemId || !otherUserId) {
+      return res.status(400).json({ message: "conversationKey, itemId, and otherUserId are required" });
+    }
+
+    const me = await resolveUserId(req.user._id);
+    const other = await resolveUserId(otherUserId);
+
+    const myCanonicalId = me?.canonicalId || String(req.user._id);
+    const otherCanonicalId = other?.canonicalId || String(otherUserId);
+
+    const canonicalConversationKey = makeConversationKey(myCanonicalId, otherCanonicalId, itemId);
+
+    const trade = await TradeConfirmation.findOne({
+      $or: [{ conversationKey: String(conversationKey) }, { conversationKey: canonicalConversationKey }],
+    });
+
+    if (!trade) return res.status(404).json({ message: "Trade not found." });
+
+    if (!trade.participantIds.includes(myCanonicalId)) {
+      return res.status(403).json({ message: "You are not part of this trade." });
+    }
+
+    if (trade.status === "successful") {
+      return res.status(409).json({ message: "Successful trades cannot be cancelled." });
+    }
+
+    trade.status = reason === "failed" ? "failed" : "cancelled";
+    trade.cancelledAt = new Date();
+    await trade.save();
+
+    await adjustUsersTrustScore(trade.participantIds, -5);
+
+    res.json({ message: "Trade marked as cancelled.", trade });
+  } catch (err) {
+    res.status(500).json({ message: err.message, error: err.message });
+  }
+});
+
+// --- PLATFORM STATS ---
+app.get("/api/platform-stats", async (_req, res) => {
+  try {
+    const successfulExchanges = await TradeConfirmation.countDocuments({ status: "successful" });
+    res.json({ successfulExchanges });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- LEADERBOARD ---
 app.get("/api/leaderboard", async (_req, res) => {
   try {
     const leaders = await User.find({})
-      .select("displayName successfulTransactionPoints image")
+      .select("displayName successfulTransactionPoints trustScore image")
       .sort({ successfulTransactionPoints: -1, createdAt: 1 })
       .limit(50)
       .lean();
@@ -863,6 +970,7 @@ app.get("/api/leaderboard", async (_req, res) => {
         rank: index + 1,
         username: u.displayName,
         successfulTransactionPoints: u.successfulTransactionPoints || 0,
+        trustScore: typeof u.trustScore === "number" ? u.trustScore : 50,
         image: u.image || null,
       }))
     );
@@ -941,7 +1049,7 @@ app.patch("/api/admin/reports/:id", async (req, res) => {
 app.get("/api/users", async (req, res) => {
   if (!req.isAuthenticated() || !isAdmin(req.user)) return res.status(403).json({ message: "Admin only" });
   try {
-    const users = await User.find({}).select("displayName email image role successfulTransactionPoints").lean();
+    const users = await User.find({}).select("displayName email image role successfulTransactionPoints trustScore").lean();
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });

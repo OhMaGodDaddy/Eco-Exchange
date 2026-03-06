@@ -6,8 +6,9 @@ const tradeConfirmationSchema = new mongoose.Schema(
     itemId: { type: String, required: true },
     participantIds: { type: [String], required: true },
     confirmations: { type: [String], default: [] },
-    status: { type: String, enum: ['pending', 'successful'], default: 'pending' },
+    status: { type: String, enum: ['pending', 'successful', 'cancelled', 'failed'], default: 'pending' },
     confirmedAt: { type: Date },
+    cancelledAt: { type: Date },
   },
   { timestamps: true }
 );

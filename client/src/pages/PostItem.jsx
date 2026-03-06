@@ -2,7 +2,7 @@ import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const CONDITION_OPTIONS = ['New', 'Like New', 'Used'];
+const CONDITION_OPTIONS = ['New', 'Like New', 'Good Condition', 'Used', 'For Repair', 'Upcycle / DIY'];
 
 function PostItem({ user }) {
   const navigate = useNavigate();
@@ -283,13 +283,6 @@ function PostItem({ user }) {
                 />
               </div>
 
-              <div className="rounded-lg border border-[#13ec37]/30 bg-[#13ec37]/5 p-4">
-                <p className="text-sm font-bold text-slate-900">🌱 Earn 50 Eco-Points</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  By listing this item, you contribute to a circular economy. Points can be redeemed for local store
-                  discounts.
-                </p>
-              </div>
 
               <div className="flex flex-col gap-3 pt-2 sm:flex-row">
                 <button

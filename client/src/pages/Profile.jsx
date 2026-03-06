@@ -24,6 +24,7 @@ export default function Profile({ user, onUserUpdate }) {
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [preferenceError, setPreferenceError] = useState('');
   const [bookmarks, setBookmarks] = useState([]);
+  const [successfulExchanges, setSuccessfulExchanges] = useState(0);
 
   useEffect(() => {
     const fetchMyItems = async () => {
@@ -78,6 +79,34 @@ export default function Profile({ user, onUserUpdate }) {
     if (user?._id) fetchBookmarks();
   }, [user]);
 
+
+  useEffect(() => {
+    const refreshUser = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/current_user`, { credentials: 'include' });
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data?._id) onUserUpdate?.(data);
+      } catch (error) {
+        console.error('Error refreshing user:', error);
+      }
+    };
+
+    const fetchStats = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/platform-stats`, { credentials: 'include' });
+        if (!response.ok) return;
+        const data = await response.json();
+        setSuccessfulExchanges(Number(data?.successfulExchanges) || 0);
+      } catch (error) {
+        console.error('Error loading platform stats:', error);
+      }
+    };
+
+    if (user?._id) refreshUser();
+    fetchStats();
+  }, [user?._id, onUserUpdate]);
+
   useEffect(() => {
     if (!Array.isArray(user?.preferences)) {
       setSelectedPreferenceIds([]);
@@ -93,6 +122,7 @@ export default function Profile({ user, onUserUpdate }) {
 
   const sharedCount = myListings.length;
   const successfulPoints = user?.successfulTransactionPoints || 0;
+  const trustScore = Number.isFinite(user?.trustScore) ? user.trustScore : 50;
   const preferenceNames = useMemo(() => formatPreferenceNames(user?.preferences), [user]);
 
   const togglePreference = (categoryId) => {
@@ -187,9 +217,9 @@ export default function Profile({ user, onUserUpdate }) {
               <h3 className="text-sm font-bold">Trust Score</h3>
               <div className="mt-3 flex items-center gap-3">
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-emerald-100">
-                  <div className="h-full w-[92%] bg-emerald-500" />
+                  <div className="h-full bg-emerald-500" style={{ width: `${Math.max(0, Math.min(100, trustScore))}%` }} />
                 </div>
-                <span className="text-sm font-bold">92%</span>
+                <span className="text-sm font-bold">{trustScore}%</span>
               </div>
               <p className="mt-2 text-xs text-slate-600">Based on your swap activity and successful exchanges.</p>
             </div>
@@ -209,7 +239,14 @@ export default function Profile({ user, onUserUpdate }) {
                 </div>
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
                   <div className="text-2xl font-bold">{sharedCount}</div>
-                  <div className="text-xs text-slate-500">Items Kept from Landfill</div>
+                  <div className="text-xs text-slate-500">Active Listings</div>
+                </div>
+              </div>
+
+              <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Items Reused Through EcoExchange</div>
+                <div className="mt-1 text-xl font-bold text-emerald-700">
+                  {successfulExchanges.toLocaleString()} Items Saved From Waste ♻️
                 </div>
               </div>
 
@@ -305,6 +342,7 @@ export default function Profile({ user, onUserUpdate }) {
                       </div>
                       <h4 className="truncate text-sm font-bold">{item.title || item.name}</h4>
                       <p className="text-xs text-slate-500">{item.hubLocation || 'Eco Hub'} • {item.status || 'Available'}</p>
+                      <p className="text-xs text-slate-500">Condition: {item.condition || 'Used'}</p>
                     </div>
                   ))}
                 </div>

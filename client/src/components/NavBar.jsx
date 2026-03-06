@@ -133,7 +133,8 @@ const styles = {
   },
   logoText: {
     fontSize: '1.2rem',
-    fontWeight: '800',
+    fontWeight: '500',
+    fontFamily: '"Unbounded", sans-serif',
     color: '#1B4332',
     letterSpacing: '-0.5px'
   },
