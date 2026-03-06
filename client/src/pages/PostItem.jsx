@@ -12,9 +12,7 @@ function PostItem({ user }) {
     category: 'Furniture',
     images: [],
     condition: 'Used',
-    lat: null,
-    lng: null,
-    locationText: ''
+    city: ''
   });
   const [loading, setLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -43,30 +41,6 @@ function PostItem({ user }) {
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) {
-      alert("Your browser doesn't support geolocation.");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setFormData((prev) => ({
-          ...prev,
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          locationText: `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`
-        }));
-        alert('📍 Location captured successfully!');
-      },
-      (error) => {
-        console.error('GPS Error:', error);
-        alert('Could not get location. Please check your browser permissions.');
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
   };
 
   const handleImageUpload = async (e) => {
@@ -116,8 +90,12 @@ function PostItem({ user }) {
     setLoading(true);
 
     const itemPayload = {
-      ...formData,
       title: formData.name,
+      description: formData.description,
+      category: formData.category,
+      condition: formData.condition,
+      city: formData.city,
+      images: formData.images,
       price: 0,
       hubLocation: 'Main Campus',
       userId: user._id,
@@ -212,27 +190,14 @@ function PostItem({ user }) {
             </div>
 
             <div className="rounded-xl border border-[#13ec37]/20 bg-white p-6 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-bold text-slate-900">Pickup Location</h3>
-                <button
-                  type="button"
-                  onClick={handleGetLocation}
-                  className="text-sm font-semibold text-[#16a34a] transition hover:opacity-80"
-                >
-                  📍 Detect Location
-                </button>
-              </div>
-              <div className="relative h-48 overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,#bbf7d0_0,transparent_40%),radial-gradient(circle_at_70%_70%,#bae6fd_0,transparent_45%)]" />
-                <div className="absolute inset-0 flex items-center justify-center text-4xl">📍</div>
-              </div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">City / Approximate Location</label>
               <input
-                className="mt-4 w-full rounded-lg border border-[#13ec37]/25 bg-[#13ec37]/5 px-4 py-3 text-sm outline-none focus:border-[#13ec37]"
-                placeholder="Enter address or landmark"
-                name="locationText"
-                value={formData.locationText}
+                name="city"
+                value={formData.city}
                 onChange={handleChange}
-                type="text"
+                placeholder="e.g., Manila, Quezon City"
+                required
+                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-[#13ec37] focus:ring-4 focus:ring-[#13ec37]/20"
               />
             </div>
           </section>

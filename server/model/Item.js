@@ -6,6 +6,7 @@ const itemSchema = new mongoose.Schema({
     category: { type: String, required: true },
     condition: { type: String, required: true },
     hubLocation: { type: String, required: true },
+    city: { type: String, required: true, trim: true },
     price: { type: Number, default: 0 },
     
     // 📸 The original single image (acts as the main thumbnail so old code doesn't break)
@@ -14,7 +15,7 @@ const itemSchema = new mongoose.Schema({
     // 📸 NEW: An array of strings to hold ALL images for the gallery
     images: { type: [String], default: [] }, 
 
-    status: { type: String, default: 'Available' },
+    status: { type: String, enum: ['Available', 'Completed', 'Exchanged', 'Removed'], default: 'Available' },
     userEmail: { type: String },
     userId: { type: String, required: true }, 
     

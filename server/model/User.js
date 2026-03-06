@@ -8,12 +8,12 @@ const UserSchema = new mongoose.Schema({
   preferences: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PreferenceCategory' }],
   preferenceSelectionCompleted: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
-  
-  // --- NEW ADMIN FIELD ---
-  role: { 
-    type: String, 
-    enum: ['user', 'admin'], // We limit the options to prevent typos
-    default: 'user'          // specific users must be manually promoted to admin
+  successfulTransactionPoints: { type: Number, default: 0 },
+  bookmarks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Item' }],
+  role: {
+    type: String,
+    enum: ['user', 'admin'],
+    default: 'user'
   }
 });
 
