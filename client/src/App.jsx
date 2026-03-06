@@ -73,7 +73,7 @@ function App() {
                 <Route path="/" element={<Home user={user} />} />
                 <Route path="/post" element={<PostItem user={user} />} />
                 <Route path="/item/:id" element={<ItemDetail user={user} />} />
-                <Route path="/profile" element={<Profile user={user} />} />
+                <Route path="/profile" element={<Profile user={user} onUserUpdate={setUser} />} />
                 <Route path="/inbox" element={<Inbox user={user} />} />
                 <Route path="/chat/:friendId" element={<Chat user={user} />} />
               </>
