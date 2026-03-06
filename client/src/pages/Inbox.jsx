@@ -8,6 +8,7 @@ import {
   FaPaperPlane,
   FaPlus,
   FaMapMarkerAlt,
+  FaArrowLeft,
 } from "react-icons/fa";
 
 const API_BASE = "https://eco-exchange-api.onrender.com";
@@ -67,6 +68,8 @@ export default function Inbox({ user }) {
   const [tradeState, setTradeState] = useState(null);
 
   const messagesEndRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 1024);
+  const [showListMobile, setShowListMobile] = useState(true);
 
   // ✅ Parse query params: /inbox?friendId=...&itemId=...
   const queryTarget = useMemo(() => {
@@ -75,6 +78,23 @@ export default function Inbox({ user }) {
     const itemId = sp.get("itemId"); // might be null
     return { friendId, itemId };
   }, [location.search]);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 1024);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setShowListMobile(true);
+      return;
+    }
+
+    if (queryTarget.friendId) {
+      setShowListMobile(false);
+    }
+  }, [isMobile, queryTarget.friendId]);
 
   // ✅ Load conversations
   useEffect(() => {
@@ -311,11 +331,12 @@ export default function Inbox({ user }) {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-zinc-50">
-      <div className="mx-auto h-full max-w-[1400px] px-4 py-6">
-        <div className="grid h-full grid-cols-1 gap-6 lg:grid-cols-[320px_1fr_320px]">
+    <div className={cn("bg-zinc-50", isMobile ? "min-h-[calc(100vh-64px)] pb-24" : "h-[calc(100vh-64px)]")}>
+      <div className={cn("mx-auto max-w-[1400px] px-4 py-6", isMobile ? "h-auto" : "h-full")}>
+        <div className={cn("grid grid-cols-1 gap-6", !isMobile && "h-full lg:grid-cols-[320px_1fr_320px]")}>
           {/* LEFT */}
-          <aside className="h-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
+          {(!isMobile || showListMobile) && (
+          <aside className={cn("overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col", !isMobile && "h-full")}>
             <div className="border-b border-zinc-100 p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-zinc-900">Messages</h3>
@@ -398,9 +419,10 @@ export default function Inbox({ user }) {
                   return (
                     <button
                       key={threadKey}
-                      onClick={() =>
-                        setActiveThread({ friendId, itemId, threadKey })
-                      }
+                      onClick={() => {
+                        setActiveThread({ friendId, itemId, threadKey });
+                        if (isMobile) setShowListMobile(false);
+                      }}
                       className={cn(
                         "w-full border-l-4 px-4 py-4 text-left transition",
                         isActive
@@ -441,11 +463,23 @@ export default function Inbox({ user }) {
               )}
             </div>
           </aside>
+          )}
 
           {/* CENTER */}
-          <section className="h-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
-            <div className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-100 px-5">
+          {(!isMobile || !showListMobile) && (
+          <section className={cn("overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col", !isMobile && "h-full")}>
+            <div className={cn("flex shrink-0 items-center justify-between border-b border-zinc-100", isMobile ? "min-h-0 flex-wrap gap-2 px-3 py-3" : "h-16 px-5")}>
               <div className="flex items-center gap-3">
+                {isMobile && (
+                  <button
+                    onClick={() => setShowListMobile(true)}
+                    className="grid h-8 w-8 place-items-center rounded-lg text-zinc-600 hover:bg-zinc-100"
+                    aria-label="Back to conversations"
+                    title="Back"
+                  >
+                    <FaArrowLeft />
+                  </button>
+                )}
                 <div className="h-10 w-10 overflow-hidden rounded-full bg-zinc-200 ring-2 ring-emerald-500/20">
                   <div className="grid h-full w-full place-items-center font-bold text-zinc-700">
                     {getInitial(activeConversation?.otherUser?.username || "?")}
@@ -468,8 +502,8 @@ export default function Inbox({ user }) {
               </div>
 
               <div className="flex items-center gap-2">
-                <button onClick={confirmTrade} className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20">
-                  <span className="text-[12px]">🤝</span> Confirm Trade
+                <button onClick={confirmTrade} className={cn("inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20", isMobile ? "px-2" : "px-3")}>
+                  <span className="text-[12px]">🤝</span> {isMobile ? "Confirm" : "Confirm Trade"}
                 </button>
                 <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100">
                   <FaBell />
@@ -572,10 +606,47 @@ export default function Inbox({ user }) {
                 Press <span className="font-semibold">Enter</span> to send,{" "}
                 <span className="font-semibold">Shift+Enter</span> for new line.
               </div>
+
+              {isMobile && (
+                <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50">
+                  <div className="relative h-36 w-full bg-zinc-200">
+                    <img
+                      alt="Item"
+                      className="h-full w-full object-cover"
+                      src={
+                        (activeItem?.images && activeItem.images.length > 0
+                          ? activeItem.images[0]
+                          : activeItem?.image) ||
+                        "https://placehold.co/900x600?text=Item+Preview"
+                      }
+                      onError={(e) => {
+                        e.currentTarget.src = "https://placehold.co/900x600?text=No+Image";
+                      }}
+                    />
+                    <div className="absolute right-2 top-2 rounded-md bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-900">
+                      EXCHANGE
+                    </div>
+                  </div>
+                  <div className="p-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">Item Details</div>
+                    <div className="mt-1 font-bold text-zinc-900">
+                      {loadingItem
+                        ? "Loading item…"
+                        : activeItem?.title || activeItem?.name || "Item title"}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-zinc-600">
+                      <FaMapMarkerAlt className="text-emerald-600" />
+                      {activeItem?.hubLocation || "Location"}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
+          )}
 
           {/* RIGHT */}
+          {!isMobile && (
           <aside className="h-full overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-zinc-200 flex flex-col">
             <div className="border-b border-zinc-100 p-4">
               <div className="text-xs font-bold uppercase tracking-wider text-zinc-400">
@@ -633,6 +704,7 @@ export default function Inbox({ user }) {
               </div>
             </div>
           </aside>
+          )}
         </div>
       </div>
     </div>
