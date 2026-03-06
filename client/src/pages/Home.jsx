@@ -523,6 +523,9 @@ export default function Home({ user }) {
                                   ? item.description
                                   : "Looking to trade or give away sustainably."}
                               </div>
+                              <div className="mt-2 text-xs font-medium text-zinc-600">
+                                Condition: <span className="font-semibold text-zinc-800">{item.condition || 'Used'}</span>
+                              </div>
                             </div>
 
                             {/* IMPORTANT: No pricing here. Removed. */}

@@ -9,6 +9,7 @@ const UserSchema = new mongoose.Schema({
   preferenceSelectionCompleted: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
   successfulTransactionPoints: { type: Number, default: 0 },
+  trustScore: { type: Number, default: 50, min: 0, max: 100 },
   bookmarks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Item' }],
   role: {
     type: String,
