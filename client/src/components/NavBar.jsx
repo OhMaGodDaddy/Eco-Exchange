@@ -6,6 +6,7 @@ import OnboardingTour from './OnBoardingTour';
 // Receives 'user' and 'onLogout' from App.jsx
 function NavBar({ user, onLogout }) {
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   
   // 💡 State to control the tour manually
   const [runTour, setRunTour] = useState(false);
@@ -31,24 +32,30 @@ function NavBar({ user, onLogout }) {
     return () => clearInterval(interval); // Cleanup
   }, [user]);
 
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   return (
     <>
-      <nav style={styles.nav}>
+      <nav style={{ ...styles.nav, ...(isMobile ? styles.navMobile : {}) }}>
         {/* Logo */}
         <Link to="/" className="tour-search-bar" style={styles.logo}>
           <div style={styles.iconContainer}>
               <FaLeaf size={20} color="#fff" />
           </div>
-          <span style={styles.logoText}>EcoExchange</span>
+          <span style={{ ...styles.logoText, ...(isMobile ? styles.logoTextMobile : {}) }}>EcoExchange</span>
         </Link>
 
         {/* Right Side Actions */}
-        <div style={styles.actions}>
+        <div style={{ ...styles.actions, ...(isMobile ? styles.actionsMobile : {}) }}>
           
           {/* --- ADMIN DASHBOARD LINK (Only for Admins) --- */}
-          <Link to="/leaderboard" style={styles.adminLink}>Leaderboard</Link>
+          {!isMobile && <Link to="/leaderboard" style={styles.adminLink}>Leaderboard</Link>}
 
-          {user && user.role === 'admin' && (
+          {user && user.role === 'admin' && !isMobile && (
               <Link to="/admin/moderation" style={styles.adminLink}>
                   <FaShieldAlt style={{ marginRight: '5px' }}/> Moderation
               </Link>
@@ -79,13 +86,13 @@ function NavBar({ user, onLogout }) {
           </Link>
 
           {/* Sell Button */}
-          <Link to="/post" className="tour-sell-button" style={styles.sellBtn}>
+          <Link to="/post" className="tour-sell-button" style={{ ...styles.sellBtn, ...(isMobile ? styles.sellBtnMobile : {}) }}>
               <FaPlus style={{marginRight: '5px'}}/> Sell
           </Link>
 
           {/* User Profile Section */}
           {user && (
-              <div className="tour-profile" style={styles.profileSection}>
+              <div className="tour-profile" style={{ ...styles.profileSection, ...(isMobile ? styles.profileSectionMobile : {}) }}>
                   <Link to="/profile" style={{ display: 'flex', alignItems: 'center' }}>
                   <img 
                       src={user.picture || user.photos?.[0]?.value || 'https://ui-avatars.com/api/?name=' + user.name} 
@@ -93,7 +100,7 @@ function NavBar({ user, onLogout }) {
                       style={styles.avatar} 
                       />
                   </Link>
-                  <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
+                  {!isMobile && <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>}
               </div>
           )}
         </div>
@@ -110,12 +117,16 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: '12px',
     padding: '15px 20px',
     backgroundColor: '#fff',
     boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
     position: 'sticky',
     top: 0,
     zIndex: 1000
+  },
+  navMobile: {
+    padding: '12px 10px'
   },
   logo: {
     display: 'flex',
@@ -138,10 +149,16 @@ const styles = {
     color: '#1B4332',
     letterSpacing: '-0.5px'
   },
+  logoTextMobile: {
+    fontSize: '1rem'
+  },
   actions: {
     display: 'flex',
     alignItems: 'center',
     gap: '15px'
+  },
+  actionsMobile: {
+    gap: '6px'
   },
   adminLink: {
     display: 'flex',
@@ -201,10 +218,17 @@ const styles = {
     alignItems: 'center',
     transition: '0.2s'
   },
+  sellBtnMobile: {
+    padding: '8px 10px',
+    fontSize: '0.8rem'
+  },
   profileSection: {
     display: 'flex',
     alignItems: 'center',
     gap: '10px'
+  },
+  profileSectionMobile: {
+    gap: '0'
   },
   avatar: {
     width: '40px',
