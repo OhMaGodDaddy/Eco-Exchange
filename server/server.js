@@ -18,11 +18,20 @@ const User = require("./model/User");
 const Item = require("./model/Item");
 const Message = require("./model/Message");
 const PreferenceCategory = require("./model/PreferenceCategory");
+const TradeConfirmation = require("./model/TradeConfirmation");
+const Report = require("./model/Report");
 
 require("./config/passport");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const MAX_ACTIVE_ITEMS = 10;
+const REPORT_REASONS = ["spam", "fake listing", "inappropriate content", "harassment", "suspicious behavior", "other"];
+
+function isAdmin(user) {
+  return !!user && typeof user.role === "string" && user.role.toLowerCase() === "admin";
+}
+
 const REGISTRATION_PREFERENCE_CATEGORIES = [
   { slug: "furniture", name: "Furniture", sortOrder: 1 },
   { slug: "electronics", name: "Electronics", sortOrder: 2 },
@@ -329,6 +338,19 @@ app.get("/api/items/:id", async (req, res) => {
 app.post("/api/items", async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
   try {
+    const city = typeof req.body.city === "string" ? req.body.city.trim() : "";
+    if (!city) {
+      return res.status(400).json({ error: "City / Approximate Location is required." });
+    }
+
+    const activeItemsCount = await Item.countDocuments({ userId: String(req.user._id), status: "Available" });
+    if (activeItemsCount >= MAX_ACTIVE_ITEMS) {
+      return res.status(400).json({
+        error:
+          "You have reached the maximum limit of 10 active items. Please remove an existing item before posting a new one.",
+      });
+    }
+
     let itemEmbedding = [];
 
     if (aiModel) {
@@ -339,9 +361,11 @@ app.post("/api/items", async (req, res) => {
 
     const newItem = new Item({
       ...req.body,
+      city,
       googleId: req.user.googleId,
       userName: req.user.displayName,
       userEmail: req.user.email,
+      userId: String(req.user._id),
       embedding: itemEmbedding,
     });
 
@@ -650,6 +674,200 @@ Keep it to 2-3 sentences. Focus on sustainability. No hashtags.`,
   } catch (error) {
     console.error("❌ AI ROUTE ERROR:", error.message);
     res.status(500).json({ error: "Failed to generate description" });
+  }
+});
+
+
+// --- BOOKMARK ROUTES ---
+app.get("/api/bookmarks", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+  try {
+    const me = await User.findById(req.user._id).populate({ path: "bookmarks", options: { sort: { createdAt: -1 } } });
+    res.json(me?.bookmarks || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/bookmarks/:itemId/toggle", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+  try {
+    const itemId = String(req.params.itemId);
+    const exists = await Item.exists({ _id: itemId });
+    if (!exists) return res.status(404).json({ message: "Item not found" });
+
+    const me = await User.findById(req.user._id);
+    const hasBookmark = (me.bookmarks || []).some((id) => String(id) === itemId);
+    if (hasBookmark) {
+      me.bookmarks = me.bookmarks.filter((id) => String(id) !== itemId);
+    } else {
+      me.bookmarks.push(itemId);
+    }
+    await me.save();
+
+    res.json({ bookmarked: !hasBookmark, bookmarks: me.bookmarks });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- TRADE CONFIRMATION ROUTES ---
+app.get("/api/trades/:conversationKey", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+  try {
+    const trade = await TradeConfirmation.findOne({ conversationKey: String(req.params.conversationKey) }).lean();
+    if (!trade) return res.json({ status: "not_started", confirmations: [] });
+    res.json(trade);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/trades/confirm", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+  try {
+    const { conversationKey, itemId, otherUserId } = req.body;
+    const myId = String(req.user._id);
+
+    if (!conversationKey || !itemId || !otherUserId) {
+      return res.status(400).json({ message: "conversationKey, itemId, and otherUserId are required" });
+    }
+
+    const item = await Item.findById(itemId);
+    if (!item) return res.status(404).json({ message: "Item not found" });
+
+    const participantIds = [myId, String(otherUserId)].sort();
+    let trade = await TradeConfirmation.findOne({ conversationKey });
+
+    if (!trade) {
+      trade = await TradeConfirmation.create({
+        conversationKey,
+        itemId: String(itemId),
+        participantIds,
+        confirmations: [myId],
+      });
+      return res.json({ message: "Trade confirmation recorded.", trade });
+    }
+
+    if (!trade.participantIds.includes(myId)) {
+      return res.status(403).json({ message: "You are not part of this trade." });
+    }
+
+    if (!trade.confirmations.includes(myId)) {
+      trade.confirmations.push(myId);
+    }
+
+    if (trade.participantIds.every((id) => trade.confirmations.includes(id))) {
+      trade.status = "successful";
+      trade.confirmedAt = new Date();
+      item.status = "Exchanged";
+      await item.save();
+      await User.findByIdAndUpdate(item.userId, { $inc: { successfulTransactionPoints: 1 } });
+    }
+
+    await trade.save();
+    res.json({ message: "Trade confirmation updated.", trade });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- LEADERBOARD ---
+app.get("/api/leaderboard", async (_req, res) => {
+  try {
+    const leaders = await User.find({})
+      .select("displayName successfulTransactionPoints image")
+      .sort({ successfulTransactionPoints: -1, createdAt: 1 })
+      .limit(50)
+      .lean();
+
+    res.json(
+      leaders.map((u, index) => ({
+        rank: index + 1,
+        username: u.displayName,
+        successfulTransactionPoints: u.successfulTransactionPoints || 0,
+        image: u.image || null,
+      }))
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- REPORTING ---
+app.post("/api/reports", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+  try {
+    const reporterUserId = String(req.user._id);
+    const { reportedItemId, reportedUserId, reason, description } = req.body;
+
+    if (!reportedItemId && !reportedUserId) {
+      return res.status(400).json({ message: "A reported item or user is required." });
+    }
+    if (!REPORT_REASONS.includes(reason)) {
+      return res.status(400).json({ message: "Invalid report reason." });
+    }
+
+    const existing = await Report.findOne({ reporterUserId, reportedItemId: reportedItemId || null });
+    if (existing) {
+      return res.status(409).json({ message: "You already reported this item." });
+    }
+
+    const report = await Report.create({
+      reporterUserId,
+      reportedItemId: reportedItemId || null,
+      reportedUserId: reportedUserId || null,
+      reason,
+      description: description || "",
+    });
+
+    res.status(201).json(report);
+  } catch (err) {
+    if (err.code === 11000) return res.status(409).json({ message: "You already reported this item." });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/admin/reports", async (req, res) => {
+  if (!req.isAuthenticated() || !isAdmin(req.user)) return res.status(403).json({ message: "Admin only" });
+  try {
+    const status = req.query?.status;
+    const query = status && ["pending", "reviewed", "resolved"].includes(status) ? { status } : {};
+    const reports = await Report.find(query).sort({ createdAt: -1 }).lean();
+    res.json(reports);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/api/admin/reports/:id", async (req, res) => {
+  if (!req.isAuthenticated() || !isAdmin(req.user)) return res.status(403).json({ message: "Admin only" });
+  try {
+    const { status, removeItem } = req.body;
+    if (!["reviewed", "resolved"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const report = await Report.findByIdAndUpdate(req.params.id, { $set: { status } }, { new: true });
+    if (!report) return res.status(404).json({ message: "Report not found" });
+
+    if (removeItem && report.reportedItemId) {
+      await Item.findByIdAndDelete(report.reportedItemId);
+    }
+
+    res.json(report);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/users", async (req, res) => {
+  if (!req.isAuthenticated() || !isAdmin(req.user)) return res.status(403).json({ message: "Admin only" });
+  try {
+    const users = await User.find({}).select("displayName email image role successfulTransactionPoints").lean();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

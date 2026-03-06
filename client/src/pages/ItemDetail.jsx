@@ -17,6 +17,7 @@ function ItemDetail({ user }) {
 
   // 📸 State for the Image Carousel
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isBookmarked, setIsBookmarked] = useState(false);
 
   useEffect(() => {
     // 1. Fetch the main item
@@ -41,6 +42,37 @@ function ItemDetail({ user }) {
         console.error("Recommendations error:", err);
       });
   }, [id]);
+
+  useEffect(() => {
+    const loadBookmarks = async () => {
+      if (!user?._id || !id) return;
+      try {
+        const res = await axios.get(`${API_BASE}/api/bookmarks`, { withCredentials: true });
+        setIsBookmarked((res.data || []).some((b) => b._id === id));
+      } catch (_err) {}
+    };
+
+    loadBookmarks();
+  }, [id, user]);
+
+  const handleBookmark = async () => {
+    if (!user?._id) return alert('Please login to bookmark items.');
+    const res = await axios.post(`${API_BASE}/api/bookmarks/${id}/toggle`, {}, { withCredentials: true });
+    setIsBookmarked(!!res.data.bookmarked);
+  };
+
+  const handleReport = async () => {
+    if (!user?._id) return alert('Please login to report items.');
+    const reason = window.prompt('Reason (spam, fake listing, inappropriate content, harassment, suspicious behavior, other):', 'spam');
+    if (!reason) return;
+    const description = window.prompt('Optional details:', '');
+    try {
+      await axios.post(`${API_BASE}/api/reports`, { reportedItemId: id, reason: reason.toLowerCase(), description: description || '' }, { withCredentials: true });
+      alert('Report submitted.');
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to report item.');
+    }
+  };
 
   const handleDelete = async () => {
     if (!window.confirm("Are you sure you want to delete this listing?")) return;
@@ -194,6 +226,9 @@ function ItemDetail({ user }) {
             <p style={styles.metaText}>
               <strong>Hub:</strong> {item.hubLocation}
             </p>
+            <p style={styles.metaText}>
+              <strong>City:</strong> {item.city || "Not specified"}
+            </p>
           </div>
 
           {/* 🗺️ MAP COMPONENT */}
@@ -215,9 +250,17 @@ function ItemDetail({ user }) {
               🗑 Delete This Listing
             </button>
           ) : (
-            <button onClick={handleChatWithOwner} style={styles.contactBtn}>
-              💬 Chat with Owner
-            </button>
+            <>
+              <button onClick={handleChatWithOwner} style={styles.contactBtn}>
+                💬 Chat with Owner
+              </button>
+              <button onClick={handleBookmark} style={styles.secondaryBtn}>
+                {isBookmarked ? "★ Saved" : "☆ Save Item"}
+              </button>
+              <button onClick={handleReport} style={styles.reportBtn}>
+                🚩 Report Listing
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -350,6 +393,26 @@ const styles = {
     cursor: "pointer",
     marginTop: "10px",
     transition: "0.2s",
+    width: "100%",
+  },
+  secondaryBtn: {
+    backgroundColor: "#e2e8f0",
+    color: "#1f2937",
+    border: "none",
+    padding: "14px",
+    borderRadius: "10px",
+    fontWeight: "700",
+    cursor: "pointer",
+    width: "100%",
+  },
+  reportBtn: {
+    backgroundColor: "#fef3c7",
+    color: "#92400e",
+    border: "none",
+    padding: "14px",
+    borderRadius: "10px",
+    fontWeight: "700",
+    cursor: "pointer",
     width: "100%",
   },
   deleteBtn: {

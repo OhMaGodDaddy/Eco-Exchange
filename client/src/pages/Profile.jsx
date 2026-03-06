@@ -23,6 +23,7 @@ export default function Profile({ user, onUserUpdate }) {
   const [editingPreferences, setEditingPreferences] = useState(false);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [preferenceError, setPreferenceError] = useState('');
+  const [bookmarks, setBookmarks] = useState([]);
 
   useEffect(() => {
     const fetchMyItems = async () => {
@@ -63,6 +64,21 @@ export default function Profile({ user, onUserUpdate }) {
   }, []);
 
   useEffect(() => {
+    const fetchBookmarks = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/bookmarks`, { credentials: 'include' });
+        if (!response.ok) return;
+        const data = await response.json();
+        setBookmarks(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Error loading bookmarks:', error);
+      }
+    };
+
+    if (user?._id) fetchBookmarks();
+  }, [user]);
+
+  useEffect(() => {
     if (!Array.isArray(user?.preferences)) {
       setSelectedPreferenceIds([]);
       return;
@@ -76,7 +92,7 @@ export default function Profile({ user, onUserUpdate }) {
   }, [user]);
 
   const sharedCount = myListings.length;
-  const impactScore = sharedCount * 12;
+  const successfulPoints = user?.successfulTransactionPoints || 0;
   const preferenceNames = useMemo(() => formatPreferenceNames(user?.preferences), [user]);
 
   const togglePreference = (categoryId) => {
@@ -182,14 +198,14 @@ export default function Profile({ user, onUserUpdate }) {
           <section className="space-y-6 md:col-span-6">
             <div className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
               <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-2xl font-bold">Sustainability Dashboard</h2>
-                <span className="text-xs font-semibold text-emerald-700">Live overview</span>
+                <h2 className="text-2xl font-bold">Trust & Activity Dashboard</h2>
+                <Link to="/leaderboard" className="text-xs font-semibold text-emerald-700 underline">View leaderboard</Link>
               </div>
 
               <div className="mb-6 grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                  <div className="text-2xl font-bold">{impactScore}kg</div>
-                  <div className="text-xs text-slate-500">CO2 Emissions Saved</div>
+                  <div className="text-2xl font-bold">{successfulPoints}</div>
+                  <div className="text-xs text-slate-500">Successful Transaction Points</div>
                 </div>
                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
                   <div className="text-2xl font-bold">{sharedCount}</div>
@@ -302,6 +318,26 @@ export default function Profile({ user, onUserUpdate }) {
               >
                 <FaBoxOpen /> Post New Listing
               </Link>
+            </div>
+
+
+            <div className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="font-bold">Bookmarks</h3>
+                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{bookmarks.length} Saved</span>
+              </div>
+              {bookmarks.length ? (
+                <div className="space-y-3">
+                  {bookmarks.slice(0, 4).map((item) => (
+                    <Link key={item._id} to={`/item/${item._id}`} className="block rounded-lg border border-slate-100 p-3 hover:bg-slate-50">
+                      <div className="text-sm font-semibold">{item.title}</div>
+                      <div className="text-xs text-slate-500">{item.city || item.hubLocation || 'Location not set'}</div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No saved items yet.</p>
+              )}
             </div>
 
             <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
