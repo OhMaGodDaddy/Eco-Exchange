@@ -5,6 +5,8 @@ const UserSchema = new mongoose.Schema({
   displayName: { type: String, required: true },
   email: { type: String, required: true },
   image: { type: String },
+  preferences: [{ type: mongoose.Schema.Types.ObjectId, ref: 'PreferenceCategory' }],
+  preferenceSelectionCompleted: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now },
   
   // --- NEW ADMIN FIELD ---
