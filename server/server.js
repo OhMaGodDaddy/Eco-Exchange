@@ -561,6 +561,31 @@ app.get("/api/messages/thread/:conversationKey", async (req, res) => {
   }
 });
 
+// New: Fetch messages for a (friendId + itemId) thread using query params
+// NOTE: This route must stay above /api/messages/:friendId to avoid path capture.
+app.get("/api/messages/thread", async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
+
+  try {
+    const myId = String(req.user._id);
+    const friendId = req.query && req.query.friendId ? String(req.query.friendId) : null;
+    const itemId = req.query && req.query.itemId ? String(req.query.itemId) : null;
+
+    if (!friendId) return res.status(400).json({ message: "friendId is required" });
+
+    const conversationKey = makeConversationKey(myId, friendId, itemId);
+
+    const messages = await Message.find({ conversationKey })
+      .sort({ timestamp: 1, _id: 1 })
+      .lean();
+
+    res.json(messages);
+  } catch (err) {
+    console.error("GET /api/messages/thread (query) error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ✅ GET general chat messages between me and friend (no itemId thread)
 app.get("/api/messages/:friendId", async (req, res) => {
   if (!req.isAuthenticated()) {
@@ -577,10 +602,7 @@ app.get("/api/messages/:friendId", async (req, res) => {
         { senderId: myId, receiverId: friendId },
         { senderId: friendId, receiverId: myId },
       ],
-      $or: [
-        { itemId: null },
-        { itemId: { $exists: false } },
-      ],
+      $or: [{ itemId: null }, { itemId: { $exists: false } }],
     })
       .sort({ createdAt: 1 })
       .lean();
@@ -660,29 +682,5 @@ app.delete("/api/items/:id", async (req, res) => {
   } catch (err) {
     console.error("DELETE /api/items/:id error:", err);
     res.status(500).json({ error: err.message || "Server error" });
-  }
-});
-
-// New: Fetch messages for a (friendId + itemId) thread using query params
-app.get("/api/messages/thread", async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ message: "Login required" });
-
-  try {
-    const myId = String(req.user._id);
-    const friendId = req.query && req.query.friendId ? String(req.query.friendId) : null;
-    const itemId = req.query && req.query.itemId ? String(req.query.itemId) : null;
-
-    if (!friendId) return res.status(400).json({ message: "friendId is required" });
-
-    const conversationKey = makeConversationKey(myId, friendId, itemId);
-
-    const messages = await Message.find({ conversationKey })
-      .sort({ timestamp: 1, _id: 1 })
-      .lean();
-
-    res.json(messages);
-  } catch (err) {
-    console.error("GET /api/messages/thread (query) error:", err);
-    res.status(500).json({ error: err.message });
   }
 });
