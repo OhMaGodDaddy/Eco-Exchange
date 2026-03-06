@@ -10,6 +10,8 @@ import Profile from './pages/Profile';
 import Chat from './pages/Chat'; 
 import Inbox from './pages/Inbox'; 
 import PreferenceSelection from './pages/PreferenceSelection';
+import Leaderboard from './pages/Leaderboard';
+import AdminModeration from './pages/AdminModeration';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -76,6 +78,8 @@ function App() {
                 <Route path="/profile" element={<Profile user={user} onUserUpdate={setUser} />} />
                 <Route path="/inbox" element={<Inbox user={user} />} />
                 <Route path="/chat/:friendId" element={<Chat user={user} />} />
+                <Route path="/leaderboard" element={<Leaderboard user={user} />} />
+                <Route path="/admin/moderation" element={<AdminModeration user={user} />} />
               </>
             )}
           </Routes>

@@ -7,6 +7,7 @@ import {
   FaTrash,
   FaHeart,
   FaRegHeart,
+  FaFlag,
 } from "react-icons/fa";
 
 // API
@@ -82,19 +83,58 @@ export default function Home({ user }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  // Local favorites UI only (optional)
   const [favorites, setFavorites] = useState(() => new Set());
   const preferenceSet = useMemo(() => getUserPreferenceSet(user), [user]);
 
-  const toggleFav = (e, itemId) => {
+  useEffect(() => {
+    const fetchBookmarks = async () => {
+      if (!user?._id) return;
+      try {
+        const res = await axios.get(`${API_BASE}/api/bookmarks`, { withCredentials: true });
+        setFavorites(new Set((res.data || []).map((item) => item._id)));
+      } catch (_err) {
+        // ignore for unauthenticated edge cases
+      }
+    };
+    fetchBookmarks();
+  }, [user]);
+
+  const toggleFav = async (e, itemId) => {
     e.preventDefault();
     e.stopPropagation();
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) next.delete(itemId);
-      else next.add(itemId);
-      return next;
-    });
+    if (!user?._id) {
+      alert('Please log in to bookmark items.');
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${API_BASE}/api/bookmarks/${itemId}/toggle`, {}, { withCredentials: true });
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        if (res.data.bookmarked) next.add(itemId);
+        else next.delete(itemId);
+        return next;
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const reportItem = async (e, itemId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user?._id) return alert('Login required to submit reports.');
+
+    const reason = window.prompt('Enter report reason (spam, fake listing, inappropriate content, harassment, suspicious behavior, other):', 'spam');
+    if (!reason) return;
+    const description = window.prompt('Optional details for moderators:', '');
+
+    try {
+      await axios.post(`${API_BASE}/api/reports`, { reportedItemId: itemId, reason: reason.toLowerCase(), description: description || '' }, { withCredentials: true });
+      alert('Report submitted. Thank you for helping keep EcoExchange safe.');
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Unable to submit report.');
+    }
   };
 
   const fetchItems = async (pageNum = 1) => {
@@ -501,13 +541,21 @@ export default function Home({ user }) {
 
                             <div className="flex items-center gap-2 text-sm text-zinc-500">
                               <FaMapMarkerAlt className="text-zinc-400" />
-                              <span className="truncate max-w-[140px]">{hub}</span>
+                              <span className="truncate max-w-[140px]">{item.city || hub}</span>
                             </div>
                           </div>
 
-                          {/* Delete row (only if allowed) */}
+                          {/* Moderation / Delete row */}
+
+                          <div className="mt-4 flex justify-end gap-2 border-t border-zinc-100 pt-3">
+                            <button
+                              onClick={(e) => reportItem(e, item._id)}
+                              className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 hover:bg-amber-100 transition"
+                            >
+                              <FaFlag />
+                              Report
+                            </button>
                           {canDelete && (
-                            <div className="mt-4 flex justify-end border-t border-zinc-100 pt-3">
                               <button
                                 onClick={(e) => handleDelete(e, item._id)}
                                 className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100 transition"
@@ -515,8 +563,8 @@ export default function Home({ user }) {
                                 <FaTrash />
                                 Delete
                               </button>
-                            </div>
                           )}
+                          </div>
                         </div>
                       </Link>
                     );

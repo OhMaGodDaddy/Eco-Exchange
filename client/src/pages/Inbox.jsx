@@ -64,6 +64,7 @@ export default function Inbox({ user }) {
   // ✅ Item preview state (right pane)
   const [activeItem, setActiveItem] = useState(null);
   const [loadingItem, setLoadingItem] = useState(false);
+  const [tradeState, setTradeState] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -205,6 +206,47 @@ export default function Inbox({ user }) {
 
     fetchItem();
   }, [activeThread.itemId]);
+
+  useEffect(() => {
+    const loadTradeState = async () => {
+      if (!activeThread.friendId || !activeThread.itemId) {
+        setTradeState(null);
+        return;
+      }
+      const conversationKey = [String(user?._id), String(activeThread.friendId)].sort().join('_') + `_${activeThread.itemId}`;
+      try {
+        const res = await axios.get(`${API_BASE}/api/trades/${conversationKey}`, { withCredentials: true });
+        setTradeState({ ...res.data, conversationKey });
+      } catch (_err) {
+        setTradeState(null);
+      }
+    };
+
+    loadTradeState();
+  }, [activeThread.friendId, activeThread.itemId, user]);
+
+  const confirmTrade = async () => {
+    if (!activeThread.friendId || !activeThread.itemId) {
+      return alert('Trade confirmation is only available for item-linked chats.');
+    }
+
+    const conversationKey = [String(user?._id), String(activeThread.friendId)].sort().join('_') + `_${activeThread.itemId}`;
+    try {
+      const res = await axios.post(`${API_BASE}/api/trades/confirm`, {
+        conversationKey,
+        itemId: activeThread.itemId,
+        otherUserId: activeThread.friendId,
+      }, { withCredentials: true });
+      setTradeState(res.data.trade);
+      if (res.data.trade?.status === 'successful') {
+        alert('Trade marked successful. Owner earned +1 Successful Transaction Point.');
+      } else {
+        alert('Your confirmation has been recorded. Waiting for the other user.');
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Unable to confirm trade.');
+    }
+  };
 
   // ✅ Auto-scroll
   useEffect(() => {
@@ -417,12 +459,17 @@ export default function Inbox({ user }) {
                     <span className="h-2 w-2 rounded-full bg-emerald-500" />
                     Online
                   </div>
+                  {tradeState?.status && tradeState.status !== "not_started" && (
+                    <div className="text-[10px] text-zinc-500">
+                      Trade status: <strong>{tradeState.status}</strong> ({tradeState.confirmations?.length || 0}/2 confirmations)
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <button className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20">
-                  <span className="text-[12px]">🤝</span> Finalize Exchange
+                <button onClick={confirmTrade} className="inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 px-3 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20">
+                  <span className="text-[12px]">🤝</span> Confirm Trade
                 </button>
                 <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100">
                   <FaBell />

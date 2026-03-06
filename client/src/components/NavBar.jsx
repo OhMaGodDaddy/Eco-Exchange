@@ -46,9 +46,11 @@ function NavBar({ user, onLogout }) {
         <div style={styles.actions}>
           
           {/* --- ADMIN DASHBOARD LINK (Only for Admins) --- */}
+          <Link to="/leaderboard" style={styles.adminLink}>Leaderboard</Link>
+
           {user && user.role === 'admin' && (
-              <Link to="/admin" style={styles.adminLink}>
-                  <FaShieldAlt style={{ marginRight: '5px' }}/> Admin
+              <Link to="/admin/moderation" style={styles.adminLink}>
+                  <FaShieldAlt style={{ marginRight: '5px' }}/> Moderation
               </Link>
           )}
 
