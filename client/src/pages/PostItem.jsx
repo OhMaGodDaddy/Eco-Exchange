@@ -227,11 +227,13 @@ function PostItem({ user }) {
                     className="w-full rounded-lg border border-[#13ec37]/25 bg-[#13ec37]/5 px-4 py-3 outline-none focus:border-[#13ec37]"
                   >
                     <option value="Furniture">Furniture</option>
-                    <option value="Plants">Plants</option>
-                    <option value="Books">Books</option>
                     <option value="Clothing">Clothing</option>
                     <option value="Electronics">Electronics</option>
-                    <option value="Kitchen">Kitchen</option>
+                    <option value="Books">Books</option>
+                    <option value="Garden / Plants">Garden / Plants</option>
+                    <option value="Appliances">Appliances</option>
+                    <option value="Toys">Toys</option>
+                    <option value="Tools">Tools</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
