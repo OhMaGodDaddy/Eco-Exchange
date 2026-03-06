@@ -20,7 +20,7 @@ const CATEGORIES = [
   { key: "Clothing", label: "Clothing" },
   { key: "Electronics", label: "Electronics" },
   { key: "Books", label: "Books" },
-  { key: "Garden", label: "Garden" },
+  { key: "Garden / Plants", label: "Garden / Plants" },
   { key: "Appliances", label: "Appliances" },
   { key: "Toys", label: "Toys" },
   { key: "Tools", label: "Tools" },
@@ -51,9 +51,17 @@ function normalizeItems(payload) {
   return [];
 }
 
+function normalizeCategoryAlias(value) {
+  const normalized = safeText(value).trim().toLowerCase();
+  if (["garden", "plants", "garden / plants", "garden/plants"].includes(normalized)) {
+    return "garden / plants";
+  }
+  return normalized;
+}
+
 function sameCategory(itemCategory, selectedCategory) {
   if (!selectedCategory) return true;
-  return safeText(itemCategory).trim().toLowerCase() === selectedCategory.trim().toLowerCase();
+  return normalizeCategoryAlias(itemCategory) === normalizeCategoryAlias(selectedCategory);
 }
 
 
