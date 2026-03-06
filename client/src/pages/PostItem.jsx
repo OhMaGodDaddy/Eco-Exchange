@@ -238,7 +238,7 @@ function PostItem({ user }) {
 
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700">Condition</label>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {CONDITION_OPTIONS.map((condition) => {
                       const selected = formData.condition === condition;
                       return (
@@ -246,7 +246,7 @@ function PostItem({ user }) {
                           key={condition}
                           type="button"
                           onClick={() => setFormData((prev) => ({ ...prev, condition }))}
-                          className={`flex-1 rounded-lg border-2 px-2 py-3 text-xs font-bold transition ${
+                          className={`w-full rounded-lg border-2 px-2 py-3 text-xs font-bold leading-tight transition ${
                             selected
                               ? 'border-[#13ec37] bg-[#13ec37]/15 text-slate-900'
                               : 'border-[#13ec37]/15 text-slate-600 hover:border-[#13ec37]/50'
