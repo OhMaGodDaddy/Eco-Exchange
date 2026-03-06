@@ -17,11 +17,23 @@ const { GoogleGenAI } = require("@google/genai");
 const User = require("./model/User");
 const Item = require("./model/Item");
 const Message = require("./model/Message");
+const PreferenceCategory = require("./model/PreferenceCategory");
 
 require("./config/passport");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const REGISTRATION_PREFERENCE_CATEGORIES = [
+  { slug: "furniture", name: "Furniture", sortOrder: 1 },
+  { slug: "electronics", name: "Electronics", sortOrder: 2 },
+  { slug: "clothing", name: "Clothing", sortOrder: 3 },
+  { slug: "books", name: "Books", sortOrder: 4 },
+  { slug: "garden-plants", name: "Garden / Plants", sortOrder: 5 },
+  { slug: "appliances", name: "Appliances", sortOrder: 6 },
+  { slug: "tools", name: "Tools", sortOrder: 7 },
+  { slug: "toys", name: "Toys", sortOrder: 8 },
+  { slug: "other", name: "Other", sortOrder: 9 },
+];
 
 // MongoDB URI handling: prefer explicit env var; fall back to local DB in dev
 const DEFAULT_LOCAL_MONGO = "mongodb://127.0.0.1:27017/eco-exchange";
@@ -60,6 +72,16 @@ function makeConversationKey(userAId, userBId, itemId) {
  */
 function getMsgTime(msg) {
   return msg.timestamp || (msg._id ? msg._id.getTimestamp() : new Date(0));
+}
+
+async function ensurePreferenceCategories() {
+  for (const category of REGISTRATION_PREFERENCE_CATEGORIES) {
+    await PreferenceCategory.findOneAndUpdate(
+      { slug: category.slug },
+      { $set: category },
+      { upsert: true, new: true }
+    );
+  }
 }
 
 app.set("trust proxy", 1);
@@ -114,6 +136,7 @@ if (MONGO_URI) {
         await Item.collection.createIndex({ status: 1 });
         await Item.collection.createIndex({ hubLocation: 1 });
         await Item.collection.createIndex({ category: 1 });
+        await ensurePreferenceCategories();
         console.log("✅ Ensured indexes on items collection");
       } catch (ixErr) {
         console.warn("⚠️ Failed to create indexes on items collection:", ixErr && ixErr.message ? ixErr.message : ixErr);
@@ -163,7 +186,61 @@ app.get(
 );
 
 app.get("/api/current_user", (req, res) => {
-  res.send(req.user);
+  if (!req.user || !req.user._id) {
+    return res.send(req.user);
+  }
+
+  User.findById(req.user._id)
+    .populate("preferences", "_id slug name")
+    .then((user) => res.send(user))
+    .catch(() => res.send(req.user));
+});
+
+app.get("/api/preferences/categories", async (_req, res) => {
+  try {
+    const categories = await PreferenceCategory.find({}).sort({ sortOrder: 1, name: 1 });
+    res.json(categories);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load preference categories." });
+  }
+});
+
+app.post("/api/preferences", async (req, res) => {
+  try {
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ error: "Unauthorized." });
+    }
+
+    const incomingIds = Array.isArray(req.body?.categoryIds) ? req.body.categoryIds : [];
+    const categoryIds = [...new Set(incomingIds.map((id) => String(id)))];
+
+    if (!categoryIds.length) {
+      return res.status(400).json({ error: "Select at least one category." });
+    }
+
+    const categories = await PreferenceCategory.find({ _id: { $in: categoryIds } }).select("_id");
+    if (categories.length !== categoryIds.length) {
+      return res.status(400).json({ error: "One or more categories are invalid." });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set: {
+          preferences: categoryIds,
+          preferenceSelectionCompleted: true,
+        },
+      },
+      { new: true }
+    ).populate("preferences", "_id slug name");
+
+    res.json({
+      message: "Preferences saved successfully.",
+      user: updatedUser,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to save preferences." });
+  }
 });
 
 app.get("/api/logout", (req, res, next) => {
