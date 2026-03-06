@@ -55,6 +55,17 @@ function sameCategory(itemCategory, selectedCategory) {
   return safeText(itemCategory).trim().toLowerCase() === selectedCategory.trim().toLowerCase();
 }
 
+
+function normalizeCategory(value) {
+  return safeText(value).trim().toLowerCase().replace(/\s*\/\s*/g, " /");
+}
+
+function getUserPreferenceSet(user) {
+  const preferences = Array.isArray(user?.preferences) ? user.preferences : [];
+  const names = preferences.map((pref) => normalizeCategory(pref?.name || pref));
+  return new Set(names.filter(Boolean));
+}
+
 export default function Home({ user }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -73,6 +84,7 @@ export default function Home({ user }) {
 
   // Local favorites UI only (optional)
   const [favorites, setFavorites] = useState(() => new Set());
+  const preferenceSet = useMemo(() => getUserPreferenceSet(user), [user]);
 
   const toggleFav = (e, itemId) => {
     e.preventDefault();
@@ -205,6 +217,12 @@ export default function Home({ user }) {
       const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
 
+      if (!selectedCategory && preferenceSet.size > 0) {
+        const aPreferred = preferenceSet.has(normalizeCategory(a.category)) ? 1 : 0;
+        const bPreferred = preferenceSet.has(normalizeCategory(b.category)) ? 1 : 0;
+        if (aPreferred !== bPreferred) return bPreferred - aPreferred;
+      }
+
       switch (sortBy) {
         case "oldest":
           return aDate - bDate;
@@ -219,7 +237,7 @@ export default function Home({ user }) {
     });
 
     return sorted;
-  }, [items, searchTerm, selectedCategory, sortBy]);
+  }, [items, searchTerm, selectedCategory, sortBy, preferenceSet]);
 
   const activeCategoryLabel =
     CATEGORIES.find((c) => c.key === selectedCategory)?.label || "All Items";

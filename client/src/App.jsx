@@ -9,6 +9,7 @@ import ItemDetail from './pages/ItemDetail';
 import Profile from './pages/Profile';
 import Chat from './pages/Chat'; 
 import Inbox from './pages/Inbox'; 
+import PreferenceSelection from './pages/PreferenceSelection';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -50,17 +51,29 @@ function App() {
     <GoogleOAuthProvider clientId="1002059220341-9vj4rqbb1p9808ludct00s0cc2oi5734.apps.googleusercontent.com">
       <Router>
         <div className="app">
-          {user && <NavBar user={user} onLogout={handleLogout} />} 
-          
+          {user && user.preferenceSelectionCompleted && (
+            <NavBar user={user} onLogout={handleLogout} />
+          )} 
+
           <Routes>
             {!user ? (
               <Route path="*" element={<Login />} />
+            ) : !user.preferenceSelectionCompleted ? (
+              <Route
+                path="*"
+                element={
+                  <PreferenceSelection
+                    user={user}
+                    onComplete={(updatedUser) => setUser(updatedUser)}
+                  />
+                }
+              />
             ) : (
               <>
                 <Route path="/" element={<Home user={user} />} />
                 <Route path="/post" element={<PostItem user={user} />} />
                 <Route path="/item/:id" element={<ItemDetail user={user} />} />
-                <Route path="/profile" element={<Profile user={user} />} />
+                <Route path="/profile" element={<Profile user={user} onUserUpdate={setUser} />} />
                 <Route path="/inbox" element={<Inbox user={user} />} />
                 <Route path="/chat/:friendId" element={<Chat user={user} />} />
               </>

@@ -44,7 +44,9 @@ passport.use(
           displayName: profile.displayName,
           email: profile.emails[0].value,
           image: profile.photos[0].value,
-          role: 'user' // Default role
+          role: 'user', // Default role
+          preferences: [],
+          preferenceSelectionCompleted: false,
         });
         
         console.log("🎉 User Created Successfully:", user.email);
