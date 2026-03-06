@@ -1,0 +1,28 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="EcoExchange logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2f7d32"/>
+      <stop offset="100%" stop-color="#9bb69f"/>
+    </linearGradient>
+    <filter id="grain" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 0.07"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="40" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="40" filter="url(#grain)"/>
+
+  <g transform="translate(75,175)">
+    <polygon points="20,90 210,55 380,95 210,130" fill="#DDBA8B"/>
+    <polygon points="20,90 210,130 210,320 20,280" fill="#D1AA78"/>
+    <polygon points="380,95 210,130 210,320 380,275" fill="#C9A16E"/>
+
+    <rect x="200" y="22" width="14" height="125" rx="7" fill="#0CA44A"/>
+    <path d="M206 25C170 12 153 -8 128 -33C169 -42 202 -32 215 -8C221 2 214 18 206 25Z" fill="#7DE000"/>
+    <path d="M208 20C243 11 261 -10 286 -36C246 -43 213 -33 200 -10C194 1 200 14 208 20Z" fill="#72D700"/>
+  </g>
+</svg>
