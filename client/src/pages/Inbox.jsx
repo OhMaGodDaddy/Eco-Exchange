@@ -39,7 +39,7 @@ function makeThreadKey(friendId, itemId) {
   return `${String(friendId || "unknown")}_${String(itemId || "general")}`;
 }
 
-export default function Inbox({ user }) {
+export default function Inbox({ user, onUserUpdate }) {
   const location = useLocation();
 
   const [conversations, setConversations] = useState([]);
@@ -170,6 +170,15 @@ export default function Inbox({ user }) {
     });
   }, [conversations, search, tab]);
 
+  const refreshUserStats = async () => {
+    try {
+      const response = await axios.get(`${API_BASE}/api/current_user`, { withCredentials: true });
+      if (response.data?._id) onUserUpdate?.(response.data);
+    } catch (err) {
+      console.error('Failed to refresh user stats:', err);
+    }
+  };
+
   // ✅ Fetch messages for active thread
   useEffect(() => {
     const fetchMessages = async () => {
@@ -260,11 +269,33 @@ export default function Inbox({ user }) {
       setTradeState(res.data.trade);
       if (res.data.trade?.status === 'successful') {
         alert('Trade marked successful. Owner earned +1 Successful Transaction Point.');
+        refreshUserStats();
       } else {
         alert('Your confirmation has been recorded. Waiting for the other user.');
       }
     } catch (err) {
       alert(err?.response?.data?.message || err?.response?.data?.error || 'Unable to confirm trade.');
+    }
+  };
+
+
+  const cancelTrade = async () => {
+    if (!activeThread.friendId || !activeThread.itemId) {
+      return alert('Trade cancellation is only available for item-linked chats.');
+    }
+
+    const conversationKey = [String(user?._id), String(activeThread.friendId)].sort().join('_') + `_${activeThread.itemId}`;
+    try {
+      const res = await axios.post(`${API_BASE}/api/trades/cancel`, {
+        conversationKey,
+        itemId: activeThread.itemId,
+        otherUserId: activeThread.friendId,
+      }, { withCredentials: true });
+      setTradeState(res.data.trade);
+      alert('Trade cancelled. Trust score adjusted.');
+      refreshUserStats();
+    } catch (err) {
+      alert(err?.response?.data?.message || err?.response?.data?.error || 'Unable to cancel trade.');
     }
   };
 
@@ -504,6 +535,9 @@ export default function Inbox({ user }) {
               <div className="flex items-center gap-2">
                 <button onClick={confirmTrade} className={cn("inline-flex h-9 items-center gap-2 rounded-xl bg-emerald-500/15 text-xs font-bold text-zinc-900 hover:bg-emerald-500/20", isMobile ? "px-2" : "px-3")}>
                   <span className="text-[12px]">🤝</span> {isMobile ? "Confirm" : "Confirm Trade"}
+                </button>
+                <button onClick={cancelTrade} className="inline-flex h-9 items-center gap-2 rounded-xl bg-rose-500/10 px-3 text-xs font-bold text-rose-700 hover:bg-rose-500/20">
+                  ✖ Cancel
                 </button>
                 <button className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100">
                   <FaBell />
